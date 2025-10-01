@@ -17,12 +17,3 @@ Contraints values -> GET -> /dynamicApi/{schema}/{table}/constraints
 
 
 
-
-1. Work Deliverables
-Task / Module	Description	Status	Effort (hrs/days)	Remarks
-Schema: mst	Created APIs for ~7 master tables (e.g., application_master, assessment_year, charges_info, citizen_type, process_def, request_submission_type, etc.)	Completed	~12 days	Implemented full CRUD APIs with validations (PK, FK, constraints, null checks)
-Schema: adm	Built APIs for ~5 tables in administrative schema	Completed	~10 days	Validated column types, handled FK dropdown values, applied data integrity checks
-Schema: process	Developed APIs for ~10 process-related tables	Completed	~15 days	Implemented insert/update validations, automated FK dropdown fetch, applied constraint checks
-Validation Layer	Added type-safe validation for integer, bigint, numeric, boolean, date, timestamp, UUID columns	Completed	~5 days	Prevented invalid data insertion and ensured data consistency
-Dropdown & Foreign Key Handling	Implemented dropdowns via tables-dropdown.properties for FK relationships	Completed	~3 days	Used {id, value} format for dynamic dropdown population
-Constraints Handling	Created API to fetch DB-level constraints (unique, PK, FK, not null) dynamically	Completed	~2 days	Enabled frontend to validate before saving data
