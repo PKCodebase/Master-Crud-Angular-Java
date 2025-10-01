@@ -1,0 +1,16 @@
+Database config -> application.yml
+LOG_PATH -> logback-spring.xml
+app configuration for jwt, credentials -> application.properties
+schema and foreign-key dropdown values -> tables-dropdown.properties
+
+Test API -> GET -> /dynamicApi/hello
+Get list of table available in the schema -> GET -> /dynamicApi/tables
+Get all of rows -> GET -> /dynamicApi/{schema}/{table}
+Get list of columns -> GET -> /dynamicApi/{schema}/{table}/columns
+Search record by PK -> GET -> /dynamicApi/{schema}/{table}/{id}
+Search records -> GET -> /dynamicApi/{schema}/{table}/search
+Insert record -> POST -> /dynamicApi/{schema}/{table}
+Update record -> PUT -> /dynamicApi/{schema}/{table}/{id}
+Delete record -> DELETE -> /dynamicApi/{schema}/{table}/{id}
+Foreign key values -> GET -> /dynamicApi/{schema}/{table}/fk-values/{column}
+Contraints values -> GET -> /dynamicApi/{schema}/{table}/constraints

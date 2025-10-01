@@ -1,0 +1,279 @@
+<div class="dynamic-form-container">
+  <mat-card class="header-card">
+    <mat-card-header>
+      <div mat-card-avatar class="header-avatar">
+        <mat-icon>dynamic_form</mat-icon>
+      </div>
+      <mat-card-title>Select Schema & Table</mat-card-title>
+      <!-- <mat-card-subtitle>Create and manage database forms dynamically</mat-card-subtitle> -->
+    </mat-card-header>
+
+    <mat-card-content>
+      <form [formGroup]="schemaForm" (ngSubmit)="onSchemaSubmit()" class="schema-selection-form">
+        <div class="selection-fields">
+          <mat-form-field appearance="outline" class="selection-field">
+            <mat-label>Database Schema</mat-label>
+            <mat-select formControlName="schema" (selectionChange)="onSchemaChange()">
+              <mat-option *ngFor="let s of schemas" [value]="s">
+                <mat-icon>storage</mat-icon>
+                {{ s }}
+              </mat-option>
+            </mat-select>
+            <!-- <mat-icon matSuffix>expand_more</mat-icon> -->
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="selection-field">
+            <mat-label>Database Table</mat-label>
+            <mat-select formControlName="table">
+              <mat-option *ngFor="let t of tables" [value]="t">
+                <mat-icon>table_chart</mat-icon>
+                {{ t }}
+              </mat-option>
+            </mat-select>
+            <!-- <mat-icon matSuffix>expand_more</mat-icon> -->
+          </mat-form-field>
+        </div>
+
+        <div class="action-buttons">
+          <button mat-fab extended color="primary" type="submit">
+            <mat-icon>play_arrow</mat-icon>
+            Load Details
+          </button>
+          <button mat-stroked-button color="accent" (click)="goBack()">
+            <mat-icon>arrow_back</mat-icon>
+            Back
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+
+  <!-- Constraints Section -->
+  <mat-card *ngIf="constraints.length > 0" class="constraints-card">
+    <mat-expansion-panel class="constraints-panel">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>rule</mat-icon>
+          Table Constraints
+        </mat-panel-title>
+        <mat-panel-description>
+          {{ constraints.length }} constraint(s) found
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="constraints-content">
+        <mat-table [dataSource]="constraints" class="constraints-table">
+          <ng-container matColumnDef="conname">
+            <mat-header-cell *matHeaderCellDef>Constraint Name</mat-header-cell>
+            <mat-cell *matCellDef="let row">{{ row.conname }}</mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="definition">
+            <mat-header-cell *matHeaderCellDef>Definition</mat-header-cell>
+            <mat-cell *matCellDef="let row">{{ row.definition }}</mat-cell>
+          </ng-container>
+
+          <mat-header-row *matHeaderRowDef="['conname','definition']"></mat-header-row>
+          <mat-row *matRowDef="let row; columns: ['conname','definition'];"></mat-row>
+        </mat-table>
+      </div>
+    </mat-expansion-panel>
+  </mat-card>
+
+  <!-- Dynamic Form Section -->
+  <mat-card *ngIf="selectedSchema && selectedTable && isFormReady" class="form-card">
+    <mat-card-header>
+      <div mat-card-avatar class="form-avatar">
+        <mat-icon>edit_note</mat-icon>
+      </div>
+      <mat-card-title>Add/Update/Delete Record for <i><b>{{ selectedSchema }}.{{ selectedTable }}</b></i></mat-card-title>
+      <!-- <mat-card-subtitle>{{ selectedRow ? 'Edit Record' : 'Add/Update/Delete Record' }}</mat-card-subtitle> -->
+    </mat-card-header>
+
+    <mat-card-content>
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="data-form">
+        <div class="form-grid">
+          <mat-form-field *ngFor="let col of columns" appearance="outline" class="form-field">
+            <mat-label>{{ col.name | titlecase }}</mat-label>
+
+            <!-- Foreign Key Select -->
+            <mat-select *ngIf="col.isForeignKey" [formControlName]="col.name" [disabled]="col.autoIncrement || col.primaryKey">
+              <mat-option *ngFor="let option of fkOptions[col.name]" [value]="option.id">
+                {{ option.value }}
+              </mat-option>
+            </mat-select>
+
+            <!-- Date/Timestamp Fields -->
+            <input *ngIf="!col.isForeignKey && (col.type.toLowerCase().includes('timestamp') || col.type.toLowerCase().includes('date'))" 
+                   matInput [matDatepicker]="picker" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey">
+            <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+            <mat-datepicker #picker></mat-datepicker>
+
+            <!-- Number Fields -->
+            <input *ngIf="!col.isForeignKey && (col.type.includes('int') || col.type.includes('numeric'))" 
+                   matInput type="number" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey">
+
+            <!-- Text Fields -->
+            <input *ngIf="!col.isForeignKey && (col.type.includes('char') || col.type.includes('text') || col.type.includes('varchar'))" 
+                   matInput type="text" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey">
+
+            <!-- Boolean Fields -->
+            <mat-select *ngIf="!col.isForeignKey && (col.type.includes('boolean') || col.type.includes('bool'))" 
+                        [formControlName]="col.name" [disabled]="col.autoIncrement || col.primaryKey">
+              <mat-option [value]="true">
+                <mat-icon>check</mat-icon> True
+              </mat-option>
+              <mat-option [value]="false">
+                <mat-icon>close</mat-icon> False
+              </mat-option>
+            </mat-select>
+
+            <!-- Default Fields -->
+            <input *ngIf="!col.isForeignKey && !col.type.includes('int') && !col.type.includes('numeric') && !col.type.includes('char') && !col.type.includes('text') && !col.type.includes('varchar') && !col.type.includes('date') && !col.type.includes('timestamp') && !col.type.includes('boolean') && !col.type.includes('bool')" 
+                   matInput type="text" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey">
+
+            <!-- Field Icons -->
+            <mat-icon matSuffix *ngIf="col.primaryKey">key</mat-icon>
+            <mat-icon matSuffix *ngIf="col.isForeignKey && !col.primaryKey">link</mat-icon>
+            <mat-icon matSuffix *ngIf="col.autoIncrement">auto_mode</mat-icon>
+
+            <mat-error *ngIf="form.get(col.name)?.invalid && form.get(col.name)?.touched">
+              {{ col.name | titlecase }} is required
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="form-actions">
+          <button mat-fab extended color="primary" type="submit" [disabled]="form.invalid">
+            <mat-icon>{{ selectedRow ? 'update' : 'add' }}</mat-icon>
+            {{ selectedRow ? 'Update Record' : 'Add Record' }}
+          </button>
+          <button mat-stroked-button color="warn" type="button" (click)="resetForm()">
+            <mat-icon>clear</mat-icon>
+            Clear Form
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Data Table Section -->
+  <mat-card *ngIf="selectedSchema && selectedTable && isFormReady" class="table-card">
+    <mat-card-header>
+      <div mat-card-avatar class="table-avatar">
+        <mat-icon>table_view</mat-icon>
+      </div>
+      <mat-card-title>Exisiting Data for <i><b>{{ selectedSchema }}.{{ selectedTable }}</b></i></mat-card-title>
+      <!-- <mat-card-subtitle>View and manage {{ selectedSchema }}.{{ selectedTable }} records</mat-card-subtitle> -->
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="table-controls">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Search Records</mat-label>
+          <input matInput (keyup)="applyFilter($event)" placeholder="Type to filter...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+        
+        <button mat-stroked-button [matMenuTriggerFor]="exportMenu" class="export-button">
+          <mat-icon>file_download</mat-icon>
+          Export
+          <mat-icon>expand_more</mat-icon>
+        </button>
+        
+        <mat-menu #exportMenu="matMenu">
+          <button mat-menu-item (click)="exportToExcel()">
+            <mat-icon>description</mat-icon>
+            <span>Excel</span>
+          </button>
+          <button mat-menu-item (click)="exportToPDF()">
+            <mat-icon>picture_as_pdf</mat-icon>
+            <span>PDF</span>
+          </button>
+          <button mat-menu-item (click)="exportToCSV()">
+            <mat-icon>table_chart</mat-icon>
+            <span>CSV</span>
+          </button>
+          <button mat-menu-item (click)="printTable()">
+            <mat-icon>print</mat-icon>
+            <span>Print</span>
+          </button>
+        </mat-menu>
+      </div>
+<!-- 
+      <div class="data-table-container">
+        <div class="table-scroll-wrapper">
+          <mat-table [dataSource]="dataSource" matSort class="data-table">
+            <ng-container *ngFor="let col of columns" [matColumnDef]="col.name">
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ col.name | titlecase }}</mat-header-cell>
+              <mat-cell *matCellDef="let row">{{ row[col.name] }}</mat-cell>
+            </ng-container>
+
+            <ng-container matColumnDef="actions">
+              <mat-header-cell *matHeaderCellDef class="sticky-actions-header">Actions</mat-header-cell>
+              <mat-cell *matCellDef="let row" class="sticky-actions-cell">
+                <div class="row-actions">
+                  <button mat-icon-button color="primary" (click)="editRow(row)" matTooltip="Edit Record">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="onDelete(row)" matTooltip="Delete Record">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </mat-cell>
+            </ng-container>
+
+            <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+            <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+          </mat-table>
+        </div>
+        
+        <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons aria-label="Select page"></mat-paginator>
+      </div> -->
+   
+      
+      
+
+
+      <div class="data-table-container mat-elevation-z8">
+        <!-- Table Wrapper for Horizontal Scroll -->
+        <div class="table-scroll-wrapper">
+          <table mat-table [dataSource]="dataSource" matSort class="mat-table">
+            
+            <!-- Dynamic Columns -->
+            <ng-container *ngFor="let col of columns" [matColumnDef]="col.name">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ col.name | titlecase }}</th>
+              <td mat-cell *matCellDef="let row">{{ row[col.name] }}</td>
+            </ng-container>
+      
+            <!-- Actions Column -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef class="sticky-actions-header">Actions</th>
+              <td mat-cell *matCellDef="let row" class="sticky-actions-cell">
+                <div class="row-actions flex gap-2">
+                  <button mat-icon-button color="primary" (click)="editRow(row)" matTooltip="Edit">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="onDelete(row)" matTooltip="Delete">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </td>
+            </ng-container>
+      
+            <!-- Header + Row -->
+            <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+        </div>
+      
+        <!-- Paginator -->
+        <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons aria-label="Select page">
+        </mat-paginator>
+      </div>
+      
+    </mat-card-content>
+  </mat-card>
+
+</div>

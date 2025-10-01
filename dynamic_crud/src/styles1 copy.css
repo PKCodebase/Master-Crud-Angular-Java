@@ -1,0 +1,541 @@
+/* You can add global styles to this file, and also import other style files */
+
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+.mat-mdc-checkbox label {
+    margin: 0;
+}
+
+.custome-checkbox {
+    ::ng-deep .mat-checkbox-ripple .mat-ripple-element {
+        background-color: black !important;
+    }
+
+    ::ng-deep .mat-checkbox-checked.mat-accent .mat-checkbox-background {
+        background-color: black !important;
+    }
+
+    ::ng-deep .mat-checkbox-indeterminate.mat-accent .mat-checkbox-background {
+        border-radius: 5px !important;
+        background-color: black !important;
+    }
+}
+
+.custome-table {
+    background-color: #f3f3ff;
+    
+    thead {
+        background-color: #17263a !important;
+        width: 100% !important;
+
+        tr {
+            th {
+                color: #fff;
+                font-size: 16px;
+                white-space: nowrap;
+                padding: 1rem 0.5rem;
+            }
+        }
+    }
+
+}
+
+
+.success-green-icon {
+    color: green !important;
+}
+
+#wrapper #content-wrapper,
+
+.card.ng-star-inserted {
+
+    background-color: rgb(228, 245, 252) !important;
+    /* Old browsers */
+    background-color: -moz-linear-gradient(top, rgba(228, 245, 252, 1) 0%, rgba(191, 232, 249, 1) 50%, rgba(159, 216, 239, 1) 51%, rgba(42, 176, 237, 1) 100%) !important;
+    /* FF3.6-15 */
+    background-color: -webkit-linear-gradient(top, rgba(228, 245, 252, 1) 0%, rgba(191, 232, 249, 1) 50%, rgba(159, 216, 239, 1) 51%, rgba(42, 176, 237, 1) 100%) !important;
+    /* Chrome10-25,Safari5.1-6 */
+    background-color: linear-gradient(to bottom, rgba(228, 245, 252, 1) 0%, rgba(191, 232, 249, 1) 50%, rgba(159, 216, 239, 1) 51%, rgba(42, 176, 237, 1) 100%) !important;
+    /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#e4f5fc', endColorstr='#2ab0ed', GradientType=0);
+    /* IE6-9 */
+
+}
+
+.card-body {
+    padding: 0 20px;
+}
+
+.dashboard-box {
+    .card {
+        height: 70px;
+        padding: 0 !important;
+        transition: 0.5s ease-in-out;
+
+        &:hover {
+            transform: scale(1.05);
+            transition: 0.5s ease-in-out;
+        }
+
+        .col-auto {
+            padding: 5px;
+        }
+    }
+
+    .bg-primary {
+        background-color: rgba(var(--bs-primary-rgb), var(--bs-bg-opacity)) !important;
+    }
+
+    .bg-success {
+        background-color: rgba(var(--bs-success-rgb), var(--bs-bg-opacity)) !important;
+    }
+
+    .bg-warning {
+        background-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+    }
+
+    .bg-rejection {
+        background-color: red !important;
+    }
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.table-body-scroll {
+    overflow-y: auto;
+    height: 500px;
+    border-collapse: collapse;
+    width: 100%;
+
+    th {
+        position: sticky;
+        top: 0;
+    }
+
+    th,
+    td {
+        padding: 8px 16px;
+        border: 1px solid #ccc;
+    }
+
+    th {
+        background: #eee;
+    }
+}
+
+.submit-btn-color {
+    background-color: green !important;
+    color: white !important;
+    text-transform: capitalize;
+}
+
+
+.text-error {
+    color: red;
+}
+
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Firefox */
+input[type=number],
+textarea {
+    -moz-appearance: textfield;
+}
+
+.background-none {
+    background-color: none;
+    background: none;
+}
+
+.width-100px {
+    width: 100px;
+}
+
+.customeLabelFont {
+    font-size: 15px;
+}
+
+.user-custome-tabs {
+    .custome-main-tabs {
+        display: flex;
+        flex-direction: row;
+        gap: 10px;
+        margin-top: 10px;
+
+        .mat-mdc-tab-body-content{
+            overflow: hidden !important;
+        }
+        .mat-mdc-tab-header {
+            .mat-mdc-tab-label-container {
+                border: 1px solid #17263a;
+                background: #ececff;
+                position: relative;
+
+                &::after {
+                    content: '';
+                    left: 0;
+                    top: 0;
+                    height: 100%;
+                    width: 100%;
+                    position: absolute;
+                    background-color: transparent;
+                }
+
+                .mat-mdc-tab-labels {
+                    flex-direction: column;
+                    width: 315px;
+                    position: relative;
+
+                    .mat-mdc-tab {
+
+                        .mdc-tab__content,
+                        .mdc-tab__text-label {
+                            width: 100%;
+                            justify-content: flex-start;
+                        }
+
+                        .mdc-tab__text-label {
+                            justify-content: space-between;
+                            white-space: pre-wrap;
+                            text-align: left;
+
+                            span:last-child {
+                                position: absolute;
+                                right: -20px;
+                                width: 26px;
+                                height: 26px;
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                background-color: white;
+                            }
+                        }
+                    }
+
+                    .mat-mdc-focus-indicator.mdc-tab--active.ng-star-inserted.mdc-tab-indicator--active,
+                    .ng-star-inserted {
+                        background-color: #17263a;
+
+                        .mdc-tab__text-label {
+                            color: #fff;
+                        }
+                    }
+
+                    .mat-mdc-tab-disabled.ng-star-inserted {
+                        background-color: transparent;
+
+                        .mdc-tab__text-label {
+                            color: #000;
+                        }
+                    }
+
+                    .mdc-tab {
+                        justify-content: start;
+                    }
+                }
+            }
+        }
+
+        .mat-mdc-tab-body-wrapper {
+            width: 100%;
+        }
+    }
+}
+
+.springLoader {
+    top: 0;
+    left: 0;
+}
+
+.customeForms {
+
+    
+
+    .mdc-radio__outer-circle,
+    .mat-mdc-radio-button .mdc-radio .mdc-radio__native-control:enabled:checked+.mdc-radio__background .mdc-radio__outer-circle,
+    .mat-mdc-radio-button .mdc-radio .mdc-radio__native-control:enabled+.mdc-radio__background .mdc-radio__inner-circle,
+    .mdc-radio__outer-circle,
+    .mat-mdc-radio-button .mdc-radio .mdc-radio__native-control:enabled:checked+.mdc-radio__background .mdc-radio__outer-circle,
+    .mat-mdc-radio-button .mdc-radio .mdc-radio__native-control:enabled+.mdc-radio__background .mdc-radio__inner-circle,
+    .mdc-radio:hover {
+        border-color: #17263a !important;
+    }
+
+
+    .mdc-text-field--disabled {
+        background-color: #17263a9c !important;
+
+        select.mat-mdc-form-field-input-control,
+        .mat-mdc-form-field-type-mat-native-select .mat-mdc-form-field-infix::after,
+        .mat-mdc-form-field:not(.mat-form-field-no-animations) .mdc-text-field__input,
+        .mdc-floating-label.mat-mdc-floating-label {
+            color: #e0e0e0 !important;
+        }
+    }
+
+    .mat-mdc-select-min-line,
+    .mat-mdc-select-value-text,
+    .mdc-floating-label.mat-mdc-floating-label,
+    .mat-mdc-select-arrow,
+    .mat-mdc-select-placeholder,
+    .mdc-text-field:not(.mdc-text-field--disabled) .mdc-text-field__input,
+    .mdc-text-field:not(.mdc-text-field--disabled) .mdc-text-field__input::placeholder .mat-datepicker-toggle,
+    .mat-mdc-select-value,
+    .mdc-text-field--disabled .mdc-floating-label {
+        color: rgb(0 0 0) !important;
+        font-weight: 500;
+    }
+
+    .mdc-text-field:not(.mdc-text-field--disabled) .mdc-floating-label,
+    .mat-mdc-select-placeholder {
+        color: rgb(0 0 0);
+    }
+
+    .form-control:focus {
+        box-shadow: none;
+    }
+
+
+    .customeForms .mat-icon.notranslate.material-icons.mat-ligature-font.mat-icon-no-color .success-green-icon {
+        color: green !important;
+    }
+
+    .darkIcon.mat-icon.notranslate.material-icons.mat-ligature-font.mat-icon-no-color {
+        color: #17263a;
+        background-color: white;
+        box-shadow: 1px 0px 5px #a9a9a9;
+    }
+
+    .mdc-text-field--invalid,
+    .mdc-text-field--invalid:not(.mdc-text-field--disabled):hover .mdc-line-ripple::before,
+    .mdc-text-field--invalid:not(.mdc-text-field--disabled) .mdc-line-ripple::before {
+        background-color: #d58080 !important;
+    }
+
+    .mdc-text-field--disabled {
+        background-color: rgba(185, 185, 185, 0.61) !important;
+
+        select.mat-mdc-form-field-input-control,
+        .mdc-text-field__input,
+        .mat-mdc-form-field-type-mat-native-select .mat-mdc-form-field-infix::after,
+        .mat-mdc-form-field:not(.mat-form-field-no-animations) .mdc-text-field__input {
+            color: #000 !important;
+            font-weight: 500;
+        }
+
+        .mdc-floating-label.mat-mdc-floating-label {
+            color: #000 !important;
+        }
+    }
+
+    .mat-form-field-invalid {
+        .mdc-text-field--invalid {
+            background-color: #d58080;
+
+            svg {
+                color: black;
+            }
+        }
+    }
+
+    .mdc-line-ripple::before {
+        border-bottom-width: 3px;
+    }
+
+    .custom-upload-file-button {
+        label {
+            color: white;
+            background: #17263a;
+            border: 1px solid #17263a;
+        }
+
+        &:hover label[_ngcontent-ulv-c361] {
+            background-color: #17263a;
+            cursor: pointer;
+        }
+
+        &:hover label {
+            color: white;
+            background: #17263a;
+            border: 1px solid #17263a;
+
+        }
+
+        input {
+            border: 1px solid #17263a;
+        }
+    }
+
+    .mat-mdc-tab-header-pagination-controls-enabled .mat-mdc-tab-header-pagination {
+        display: none;
+    }
+
+}
+
+.custome-table2 {
+    &.table {
+        width: 100%;
+        border: 1px solid #EEEEEE;
+        padding: 0;
+
+        .table-header {
+            display: flex;
+            width: 100%;
+            padding: 12px;
+            background: #17263a;
+            color: #fff;
+        }
+
+        .filter__link {
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .table-row {
+            display: flex;
+            width: 100%;
+            padding: 0 12px;
+
+            &:nth-of-type(odd) {
+                background: #ececff;
+            }
+        }
+
+        .table-data,
+        .header__item {
+            flex: 1 1 20%;
+            text-align: left;
+        }
+
+        .header__item {
+            text-transform: uppercase;
+        }
+    }
+
+    thead,
+    .table-header {
+        background-color: #17263a;
+        color: #fff;
+        white-space: nowrap;
+    }
+
+}
+
+.input-group>.form-control:focus,
+.input-group>.form-floating:focus-within,
+.input-group>.form-select:focus {
+    z-index: 0;
+}
+
+.custome-table3 {
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    td {
+        border: 1px solid black;
+    }
+
+    /* try removing the "hack" below to see how the table overflows the .body */
+    .hack1 {
+        display: table;
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    .hack2 {
+        display: table-cell;
+        overflow-x: auto;
+        width: 100%;
+    }
+
+}
+
+
+.custome-textArea {
+    height: auto !important;
+
+    .mat-mdc-form-field-infix {
+        width: 100%;
+        padding: 0;
+        max-width: 100%;
+        min-width: 100%;
+    }
+}
+
+.cursors-pointer {
+    cursor: pointer;
+}
+
+.backbtn {
+    background-color: transparent;
+
+    .p-button:enabled:hover,
+    .p-button {
+        background-color: transparent;
+        color: black;
+        border: 1px solid black;
+        text-transform: capitalize;
+    }
+}
+
+
+@media(max-width: 1150px) {
+    .customeForms {
+        .mat-mdc-tab-body {
+            .row {
+                .w-75 {
+                    width: 100% !important;
+                }
+            }
+        }
+    }
+
+    .saral-part-1-view {
+        .row {
+            .mat-mdc-text-field-wrapper {
+                padding: 0 5px;
+            }
+        }
+    }
+}
+
+@media(min-width: 415px) {
+    .dropdownWidth {
+        min-width: 350px !important;
+    }
+}
+
+.long-text-break {
+    word-break: break-all;
+}
+
+
+.noc-dashboard .mat-mdc-tab-header .mat-mdc-tab-label-container:after {
+    position: unset!important;
+}
+.custome-table2.table .filter__link, .custome-table2.table .table-data, .custome-table2.table .header__item{
+    background-color: transparent;
+}
+.modal-backdrop.show{
+    display: none !important;
+}
+

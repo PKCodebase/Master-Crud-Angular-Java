@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://10.197.214.54:5432/SWAGAM
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: none

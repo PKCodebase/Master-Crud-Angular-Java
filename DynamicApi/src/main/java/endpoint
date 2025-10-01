@@ -1,0 +1,22 @@
+Example Endpoints (now auto-using PKs)
+
+List tables:
+GET /api/public/emp/tables
+
+Get all:
+GET /api/public/emp
+
+Get by PK:
+GET /api/public/emp/101
+
+Search:
+GET /api/public/emp/search?filter=age>30&filter=dept=IT
+
+Insert:
+POST /api/public/emp
+
+Update by PK:
+PUT /api/public/emp/101
+
+Delete by PK:
+DELETE /api/public/emp/101
