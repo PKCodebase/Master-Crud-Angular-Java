@@ -5,7 +5,6 @@
         <mat-icon>dynamic_form</mat-icon>
       </div>
       <mat-card-title>Select Schema & Table</mat-card-title>
-      <!-- <mat-card-subtitle>Create and manage database forms dynamically</mat-card-subtitle> -->
     </mat-card-header>
 
     <mat-card-content>
@@ -19,7 +18,6 @@
                 {{ s }}
               </mat-option>
             </mat-select>
-            <!-- <mat-icon matSuffix>expand_more</mat-icon> -->
           </mat-form-field>
 
           <mat-form-field appearance="outline" class="selection-field">
@@ -30,7 +28,6 @@
                 {{ t }}
               </mat-option>
             </mat-select>
-            <!-- <mat-icon matSuffix>expand_more</mat-icon> -->
           </mat-form-field>
         </div>
 
@@ -47,7 +44,6 @@
       </form>
     </mat-card-content>
   </mat-card>
-
 
   <!-- Constraints Section -->
   <mat-card *ngIf="constraints.length > 0" class="constraints-card">
@@ -88,17 +84,18 @@
         <mat-icon>edit_note</mat-icon>
       </div>
       <mat-card-title>Add/Update/Delete Record for <i><b>{{ selectedSchema }}.{{ selectedTable }}</b></i></mat-card-title>
-      <!-- <mat-card-subtitle>{{ selectedRow ? 'Edit Record' : 'Add/Update/Delete Record' }}</mat-card-subtitle> -->
     </mat-card-header>
 
     <mat-card-content>
       <form [formGroup]="form" (ngSubmit)="onSubmit()" class="data-form">
         <div class="form-grid">
-          <mat-form-field *ngFor="let col of columns" appearance="outline" class="form-field">
+          <!-- ✅ Use displayColumns instead of columns to hide auto fields -->
+          <mat-form-field *ngFor="let col of displayColumns" appearance="outline" class="form-field">
             <mat-label>{{ col.name | titlecase }}</mat-label>
 
             <!-- Foreign Key Select -->
-            <mat-select *ngIf="col.isForeignKey" [formControlName]="col.name" [disabled]="col.autoIncrement || col.primaryKey">
+            <mat-select *ngIf="col.isForeignKey" [formControlName]="col.name" 
+                       [disabled]="col.autoIncrement || col.primaryKey">
               <mat-option *ngFor="let option of fkOptions[col.name]" [value]="option.id">
                 {{ option.value }}
               </mat-option>
@@ -106,17 +103,20 @@
 
             <!-- Date/Timestamp Fields -->
             <input *ngIf="!col.isForeignKey && (col.type.toLowerCase().includes('timestamp') || col.type.toLowerCase().includes('date'))" 
-                   matInput [matDatepicker]="picker" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey">
+                   matInput [matDatepicker]="picker" [formControlName]="col.name" 
+                   [readonly]="col.autoIncrement || col.primaryKey">
             <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
             <mat-datepicker #picker></mat-datepicker>
 
             <!-- Number Fields -->
             <input *ngIf="!col.isForeignKey && (col.type.includes('int') || col.type.includes('numeric'))" 
-                   matInput type="number" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey">
+                   matInput type="number" [formControlName]="col.name" 
+                   [readonly]="col.autoIncrement || col.primaryKey">
 
             <!-- Text Fields -->
             <input *ngIf="!col.isForeignKey && (col.type.includes('char') || col.type.includes('text') || col.type.includes('varchar'))" 
-                   matInput type="text" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey">
+                   matInput type="text" [formControlName]="col.name" 
+                   [readonly]="col.autoIncrement || col.primaryKey">
 
             <!-- Boolean Fields -->
             <mat-select *ngIf="!col.isForeignKey && (col.type.includes('boolean') || col.type.includes('bool'))" 
@@ -130,8 +130,12 @@
             </mat-select>
 
             <!-- Default Fields -->
-            <input *ngIf="!col.isForeignKey && !col.type.includes('int') && !col.type.includes('numeric') && !col.type.includes('char') && !col.type.includes('text') && !col.type.includes('varchar') && !col.type.includes('date') && !col.type.includes('timestamp') && !col.type.includes('boolean') && !col.type.includes('bool')" 
-                   matInput type="text" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey">
+            <input *ngIf="!col.isForeignKey && !col.type.includes('int') && !col.type.includes('numeric') && 
+                          !col.type.includes('char') && !col.type.includes('text') && !col.type.includes('varchar') && 
+                          !col.type.includes('date') && !col.type.includes('timestamp') && 
+                          !col.type.includes('boolean') && !col.type.includes('bool')" 
+                   matInput type="text" [formControlName]="col.name" 
+                   [readonly]="col.autoIncrement || col.primaryKey">
 
             <!-- Field Icons -->
             <mat-icon matSuffix *ngIf="col.primaryKey">key</mat-icon>
@@ -164,8 +168,7 @@
       <div mat-card-avatar class="table-avatar">
         <mat-icon>table_view</mat-icon>
       </div>
-      <mat-card-title>Exisiting Data for <i><b>{{ selectedSchema }}.{{ selectedTable }}</b></i></mat-card-title>
-      <!-- <mat-card-subtitle>View and manage {{ selectedSchema }}.{{ selectedTable }} records</mat-card-subtitle> -->
+      <mat-card-title>Existing Data for <i><b>{{ selectedSchema }}.{{ selectedTable }}</b></i></mat-card-title>
     </mat-card-header>
 
     <mat-card-content>
@@ -201,48 +204,14 @@
           </button>
         </mat-menu>
       </div>
-<!-- 
-      <div class="data-table-container">
-        <div class="table-scroll-wrapper">
-          <mat-table [dataSource]="dataSource" matSort class="data-table">
-            <ng-container *ngFor="let col of columns" [matColumnDef]="col.name">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ col.name | titlecase }}</mat-header-cell>
-              <mat-cell *matCellDef="let row">{{ row[col.name] }}</mat-cell>
-            </ng-container>
-
-            <ng-container matColumnDef="actions">
-              <mat-header-cell *matHeaderCellDef class="sticky-actions-header">Actions</mat-header-cell>
-              <mat-cell *matCellDef="let row" class="sticky-actions-cell">
-                <div class="row-actions">
-                  <button mat-icon-button color="primary" (click)="editRow(row)" matTooltip="Edit Record">
-                    <mat-icon>edit</mat-icon>
-                  </button>
-                  <button mat-icon-button color="warn" (click)="onDelete(row)" matTooltip="Delete Record">
-                    <mat-icon>delete</mat-icon>
-                  </button>
-                </div>
-              </mat-cell>
-            </ng-container>
-
-            <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
-            <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
-          </mat-table>
-        </div>
-        
-        <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons aria-label="Select page"></mat-paginator>
-      </div> -->
-   
-      
-      
-
 
       <div class="data-table-container mat-elevation-z8">
         <!-- Table Wrapper for Horizontal Scroll -->
         <div class="table-scroll-wrapper">
           <table mat-table [dataSource]="dataSource" matSort class="mat-table">
             
-            <!-- Dynamic Columns -->
-            <ng-container *ngFor="let col of columns" [matColumnDef]="col.name">
+            <!-- ✅ Dynamic Columns - Only show non-auto fields -->
+            <ng-container *ngFor="let col of displayColumns" [matColumnDef]="col.name">
               <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ col.name | titlecase }}</th>
               <td mat-cell *matCellDef="let row">{{ row[col.name] }}</td>
             </ng-container>
@@ -272,8 +241,6 @@
         <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons aria-label="Select page">
         </mat-paginator>
       </div>
-      
     </mat-card-content>
   </mat-card>
-
 </div>

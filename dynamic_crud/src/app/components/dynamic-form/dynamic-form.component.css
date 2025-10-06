@@ -548,3 +548,7 @@ th.mat-header-cell {
    background: #e3f2fd !important; 
 
 }
+input[readonly], mat-select[disabled] {
+  background-color: #f5f5f5;
+  color: #555;
+}

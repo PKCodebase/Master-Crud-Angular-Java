@@ -345,11 +345,6 @@ public List<String> getAllSchemas() {
             .collect(Collectors.toList());
 }
 
-//    // ✅ Get all schemas
-//    public List<String> getAllSchemas() {
-//        String sql = "SELECT schema_name FROM information_schema.schemata ORDER BY schema_name";
-//        return jdbcTemplate.queryForList(sql, String.class);
-//    }
 
     // ✅ Get all tables for a given schema
     public List<String> getTablesBySchema(String schema) {
