@@ -4,23 +4,28 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
+
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
+@PropertySource("classpath:tables-dropdown.properties")
 public class DatabaseMetadataService {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+
+    @Autowired
+    private Environment env;
+
+
 
     /**
      * Get list of schemas and tables in the DB
@@ -39,7 +44,7 @@ public class DatabaseMetadataService {
         }
         return schemaTables;
     }
-    
+
     public Map<String, List<String>> getAllTables(List<String> schemaList) throws SQLException {
         Map<String, List<String>> schemaTables = new HashMap<>();
         try (Connection conn = Objects.requireNonNull(jdbcTemplate.getDataSource()).getConnection()) {
@@ -48,7 +53,7 @@ public class DatabaseMetadataService {
 
             while (rs.next()) {
                 String schema = rs.getString("TABLE_SCHEM");
-                
+
                 if(!schemaList.isEmpty() && schemaList.contains(schema)) {
                 	String table = rs.getString("TABLE_NAME");
                     schemaTables.computeIfAbsent(schema, k -> new ArrayList<>()).add(table);
@@ -74,7 +79,7 @@ public class DatabaseMetadataService {
                     pkColumns.add(pkRs.getString("COLUMN_NAME"));
                 }
             }
-            
+
             // Collect FK columns for this table
             Set<String> fkColumns = new HashSet<>();
             ResultSet fkRs = metaData.getImportedKeys(conn.getCatalog(), schema, table);
@@ -102,7 +107,7 @@ public class DatabaseMetadataService {
                         case "timestamp"   -> "timestamp";
                         default -> rawType; // fallback
                     };
-                    
+
                     int size = rs.getInt("COLUMN_SIZE");
                     String isNullable = rs.getString("IS_NULLABLE");
                     String isAutoInc = rs.getString("IS_AUTOINCREMENT");
@@ -114,7 +119,7 @@ public class DatabaseMetadataService {
                     col.put("nullable", "YES".equalsIgnoreCase(isNullable));
                     col.put("autoIncrement", "YES".equalsIgnoreCase(isAutoInc));
                     col.put("primaryKey", pkColumns.contains(colName));
-                    col.put("isForeignKey", fkColumns.contains(colName)); 
+                    col.put("isForeignKey", fkColumns.contains(colName));
 
                     columns.add(col);
                 }
@@ -138,7 +143,9 @@ public class DatabaseMetadataService {
         }
         return pkCols;
     }
-    
+
+    //Exact
+
     public List<Map<String, Object>> getForeignKeys(String schema, String table) throws SQLException {
         List<Map<String, Object>> fks = new ArrayList<>();
         try (Connection conn = Objects.requireNonNull(jdbcTemplate.getDataSource()).getConnection()) {
@@ -151,7 +158,7 @@ public class DatabaseMetadataService {
                 fk.put("pkTableSchema", rs.getString("PKTABLE_SCHEM"));
                 fk.put("pkTable", rs.getString("PKTABLE_NAME"));
                 fk.put("pkColumn", rs.getString("PKCOLUMN_NAME"));
-                
+
                 // 🔍 Identify display columns for referenced table
                 List<String> displayCols = new ArrayList<>();
                 try (ResultSet cols = metaData.getColumns(conn.getCatalog(), rs.getString("PKTABLE_SCHEM"), rs.getString("PKTABLE_NAME"), "%")) {
@@ -168,16 +175,65 @@ public class DatabaseMetadataService {
                     }else {
                     	fk.put("displayColumn", "NONE");
                     }
-                    
+
                 }
                 //fk.put("displayColumns", displayCols);
-                
+
                 fks.add(fk);
             }
         }
         return fks;
     }
-    
+
+//    public List<Map<String, Object>> getForeignKeys(String schema, String table) {
+//        List<Map<String, Object>> fks = new ArrayList<>();
+//
+//        String keyProp = env.getProperty(schema + "." + table + ".key");
+//        String valProp = env.getProperty(schema + "." + table + ".val");
+//        String displayProp = env.getProperty(schema + "." + table + ".display", valProp); // fallback to val
+//
+//        if (keyProp != null && valProp != null) {
+//            String sql = "SELECT \"" + keyProp + "\" as id, \"" + displayProp + "\" as value FROM " + schema + "." + table;
+//            try {
+//                List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
+//                fks.addAll(results);
+//            } catch (Exception e) {
+//                System.out.println("Error fetching FK values: " + e.getMessage());
+//            }
+//        }
+//
+//        return fks;
+//    }
+
+//    public List<Map<String, Object>> getForeignKeys(String schema, String table) {
+//
+//        String keyProp = env.getProperty(schema + "." + table + ".key");
+//        String valProp = env.getProperty(schema + "." + table + ".val");
+//
+//        if (keyProp == null || valProp == null) {
+//            throw new RuntimeException("Properties not defined for table: " + schema + "." + table);
+//        }
+//
+//        String sql = "SELECT \"" + keyProp + "\" as id, \"" + valProp + "\" as value FROM " + schema + "." + table;
+//        System.out.println("Executing SQL from properties: " + sql);
+//
+//        List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
+//
+//        // Wrap results with fk info
+//        List<Map<String, Object>> fks = new ArrayList<>();
+//        for (Map<String, Object> row : results) {
+//            Map<String, Object> fk = new HashMap<>();
+//            fk.put("fkColumn", keyProp);
+//            fk.put("pkTableSchema", schema);
+//            fk.put("pkTable", table);
+//            fk.put("pkColumn", keyProp);
+//            fk.put("displayColumn", valProp);
+//            fks.add(fk);
+//        }
+//
+//        return fks;
+//    }
+
     public String getColumnType(String schema, String table, String column) {
         List<String> result = jdbcTemplate.query(
             "SELECT data_type FROM information_schema.columns " +
@@ -213,7 +269,7 @@ public class DatabaseMetadataService {
                 return value; // fallback: string
         }
     }
-    
+
     public Map<String, Integer> getColumnTypes(String schema, String table) {
         String sql = """
             SELECT column_name, data_type
@@ -233,7 +289,7 @@ public class DatabaseMetadataService {
         }
         return columnTypes;
     }
-    
+
     public List<Map<String, Object>> getColumnInfo(String schema, String table) {
         // Get all columns
         List<Map<String, Object>> cols = jdbcTemplate.query(
@@ -262,7 +318,7 @@ public class DatabaseMetadataService {
         return cols;
     }
 
-    
+
     private int mapPostgresTypeToSqlType(String pgType) {
         return switch (pgType) {
             case "integer" -> java.sql.Types.INTEGER;
@@ -278,14 +334,16 @@ public class DatabaseMetadataService {
         };
     }
 
-    public List<String> getAllSchemas() {
-        // PostgreSQL query to fetch all non-system schemas
-        String sql = "SELECT schema_name FROM information_schema.schemata " +
-                "WHERE schema_name NOT IN ('information_schema','pg_catalog') " +
-                "ORDER BY schema_name";
-        return jdbcTemplate.queryForList(sql, String.class);
-    }
-
+//    public List<String> getAllSchemas() {
+//        // PostgreSQL query to fetch all non-system schemas
+//        return tableProperties.getValidSchemaList();
+//    }
+public List<String> getAllSchemas() {
+    String schemas = env.getProperty("valid.schema.list", "");
+    return Arrays.stream(schemas.split(","))
+            .map(String::trim)
+            .collect(Collectors.toList());
+}
 
 //    // ✅ Get all schemas
 //    public List<String> getAllSchemas() {
@@ -298,4 +356,5 @@ public class DatabaseMetadataService {
         String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name";
         return jdbcTemplate.queryForList(sql, new Object[]{schema}, String.class);
     }
+
 }
