@@ -3,7 +3,6 @@ package com.example.demo;
 import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -15,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import com.example.generator.NetworkUtils;
+import com.example.security.IPUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -299,7 +298,7 @@ public Map<String, Object> insertRow(
     Map<String, Object> autoFields = new HashMap<>();
     autoFields.put("created_by",currentUser );
     autoFields.put("created_date", now);
-    autoFields.put("created_ip_addr", NetworkUtils.getSystemIpAddress());
+    autoFields.put("created_ip_addr", IPUtil.getClientIp(request));
 //    autoFields.put("created_mac_addr", NetworkUtils.generateRandomMacAddress());
     autoFields.putIfAbsent("status", "ACTIVE");
 
@@ -427,7 +426,7 @@ public Map<String, Object> insertRow(
 
         rowData.put("modified_by", currentUser);
         rowData.put("modified_date",  LocalDateTime.now());
-        rowData.put("modified_ip_addr",  NetworkUtils.getSystemIpAddress());
+        rowData.put("modified_ip_addr",  IPUtil.getClientIp(request));
 //        rowData.put("modified_mac_addr", NetworkUtils.generateRandomMacAddress());
 
 
