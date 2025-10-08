@@ -1,5 +1,6 @@
-package com.example.security;
+package com.example.config;
 
+import com.example.security.JwtFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
