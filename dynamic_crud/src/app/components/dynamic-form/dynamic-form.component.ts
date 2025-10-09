@@ -467,6 +467,7 @@ export class DynamicFormComponent implements OnInit {
   autoFields: string[] = [
     'created_ip_addr', 'created_by', 'created_mac_addr', 'created_date',
     'modified_ip_addr', 'modified_by', 'modified_date', 'modified_mac_addr'
+    ,'api_service_url'
   ];
 
   // ✅ Filtered columns for UI display (excludes auto fields)
@@ -474,15 +475,25 @@ export class DynamicFormComponent implements OnInit {
     return this.columns.filter(col => !this.autoFields.includes(col.name));
   }
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
-  @ViewChild(MatSort) sort!: MatSort;
+  //@ViewChild it is a decorator in Angular It allows you to reference a child component,
+  //  directive, or DOM element from your template. 
+  // You can then access its properties and methods in your TypeScript code.
+  @ViewChild(MatPaginator) paginator!: MatPaginator;  // Pagination control
+  @ViewChild(MatSort) sort!: MatSort;  //Sorting Control
   router: any;
 
+
+  // injecting Dependency of DynamicFormService
+  // FormBuilder is used for create and manage form easily
   constructor(private formService: DynamicFormService, private fb: FormBuilder) {}
 
+
+//ngOnInit() is a lifecycle hook in Angular.
+//It runs automatically when your component is initialized (just after it is created).
+//It’s commonly used for setup work — like creating forms, fetching data from APIs, etc.
   ngOnInit(): void {
     this.schemaForm = this.fb.group({
-      schema: ['', Validators.required],
+      schema: ['', Validators.required], //Validators is used for validation 
       table: ['', Validators.required]
     });
 
@@ -492,6 +503,7 @@ export class DynamicFormComponent implements OnInit {
     });
   }
 
+  //Load table inside schema
   onSchemaChange() {
     const schema = this.schemaForm.value.schema;
     this.formService.getTables(schema).subscribe((tables) => {

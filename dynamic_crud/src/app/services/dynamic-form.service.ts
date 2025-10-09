@@ -26,7 +26,7 @@ export class DynamicFormService {
     return this.http.get<{ [schema: string]: string[] }>(`${this.baseUrl}/tables`);
   }
 
-  getColumns(schema: string, table: string): Observable<any[]> {
+    getColumns(schema: string, table: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/${schema}/${table}/columns`);
   }
 
