@@ -285,7 +285,6 @@ public Map<String, Object> insertRow(
     // 1️⃣ Auto system fields
 //    String currentUser = getCurrentUsername(); // JWT / SecurityContext se
     String currentUser = "System";
-    String ipAddress = request.getRemoteAddr();
     LocalDateTime  now = LocalDateTime.now();
 
     // Common auto fields
@@ -417,7 +416,6 @@ public Map<String, Object> insertRow(
         // 1️⃣ Auto system fields
 //        String currentUser = getCurrentUsername(); // JWT / SecurityContext se
         String currentUser = "System";
-        String ipAddress = request.getRemoteAddr();
         LocalDateTime now = LocalDateTime.now();
 
         rowData.put("modified_by", currentUser);
@@ -436,7 +434,8 @@ public Map<String, Object> insertRow(
             String dataType = (String) col.get("type");
 
             // Skip PK
-            if (pkColumns.contains(colName)) continue;
+            if (pkColumns.contains(colName))
+                continue;
 
             if (rowData.containsKey(colName)) {
                 Object val = rowData.get(colName);
@@ -488,6 +487,8 @@ public Map<String, Object> insertRow(
                 return Boolean.valueOf(str);
             case "date":
                 return java.sql.Date.valueOf(str);
+//            case "json":
+//                return str;
             case "timestamp":
             case "timestamptz":
             case "timestamp with time zone":

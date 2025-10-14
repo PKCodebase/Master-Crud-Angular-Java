@@ -101,6 +101,7 @@ public class DatabaseMetadataService {
                         case "int8"     -> "bigint";
                         case "serial"   -> "serial";
                         case "bigserial"-> "bigserial";
+//                        case "json", "jsonb" -> "json";
                         case "varchar"  -> "varchar";
                         case "bpchar"   -> "char";
                         case "timestamptz" -> "timestamp with time zone";
