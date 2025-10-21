@@ -42,14 +42,14 @@ public class SecurityConfig {
 //        return authConfig.getAuthenticationManager();
 //    }
 
-    private static final String[] SWAGGER_WHITELIST = {
-            "/swagger-ui.html",
-            "/swagger-ui/**",
-            "/v3/api-docs/**",
-            "/v3/api-docs",
-            "/webjars/**",
-            "/swagger-resources/**"
-    };
+        private static final String[] SWAGGER_WHITELIST = {
+                "/swagger-ui.html",
+                "/swagger-ui/**",
+                "/v3/api-docs/**",
+                "/v3/api-docs",
+                "/webjars/**",
+                "/swagger-resources/**"
+        };
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
