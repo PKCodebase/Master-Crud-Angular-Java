@@ -55,7 +55,7 @@ public class DynamicCrudApiController {
     public String hello() {
         return "Hello, Spring Boot!";
     }
-    
+
     // List tables per schema
     @GetMapping("/tables")
     public Map<String, List<String>> listTables() throws SQLException {
@@ -69,18 +69,18 @@ public class DynamicCrudApiController {
     public ResponseEntity<?> getAll(
             @PathVariable String schema,
             @PathVariable String table) throws SQLException {
-    	
+
     	Map<String, Object> error = new HashMap<>();
         if(schema.isBlank() && table.isBlank()) {
     		error.put("error", "Enter Schema");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
 		}
-    	
+
     	if(!getValidSchemaList(schema)) {
     		error.put("error", "Enter Valid Schema");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     	}
-    	
+
     	//return jdbcTemplate.queryForList("SELECT * FROM " + schema + "." + table);
     	List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
 
@@ -118,7 +118,7 @@ public class DynamicCrudApiController {
         }
         return ResponseEntity.ok(rows);
     }
-    
+
     @GetMapping("/{schema}/{table}/columns")
     public List<Map<String, Object>> getTableColumns(
             @PathVariable String schema,
@@ -468,7 +468,7 @@ public Map<String, Object> insertRow(
                 .findFirst()
                 .orElse("text");
     }
-    
+
     private Object convertValue(Object value, String dataType) {
         if (value == null) return null;
         String str = value.toString();
@@ -487,8 +487,19 @@ public Map<String, Object> insertRow(
                 return Boolean.valueOf(str);
             case "date":
                 return java.sql.Date.valueOf(str);
-//            case "json":
-//                return str;
+            case "json":
+            case "jsonb":
+                try {
+                    org.postgresql.util.PGobject jsonObject = new org.postgresql.util.PGobject();
+                    jsonObject.setType("jsonb");
+                    // Wrap plain string in quotes so it becomes valid JSON
+                    jsonObject.setValue("\"" + str.replace("\"", "\\\"") + "\"");
+                    return jsonObject;
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to convert value to JSONB: " + str, e);
+                }
+
+
             case "timestamp":
             case "timestamptz":
             case "timestamp with time zone":
@@ -524,7 +535,7 @@ public Map<String, Object> insertRow(
         }
     }
 
-    
+
 
     // Delete by PK
     @DeleteMapping("/{schema}/{table}/{id}")
@@ -542,7 +553,7 @@ public Map<String, Object> insertRow(
         String sql = "DELETE FROM " + schema + "." + table + " WHERE " + pk + " = ?";
         return jdbcTemplate.update(sql, id);
     }
-    
+
  // Define formatter compatible with <input type="datetime-local">
 //    private static final DateTimeFormatter HTML5_DATE_TIME =
 //            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
@@ -572,7 +583,7 @@ public Map<String, Object> insertRow(
 //
 //        return value;
 //    }
-    
+
 //    @GetMapping("/{schema}/{table}/fk-values/{column}")
 //    public List<Map<String, Object>> getForeignKeyValues(
 //            @PathVariable String schema,
@@ -704,7 +715,7 @@ public List<Map<String, Object>> getForeignKeyValues(
 		}
     	return false;
     }
-    
+
     public String getProperty(String val) {
     	String propValue = "";
     	try {
@@ -720,7 +731,7 @@ public List<Map<String, Object>> getForeignKeyValues(
 		}
     	return propValue;
     }
-    
+
     @GetMapping("/{schema}/{table}/constraints")
     public List<Map<String, Object>> getConstraints(@PathVariable String schema, @PathVariable String table) {
         String sql = """ 

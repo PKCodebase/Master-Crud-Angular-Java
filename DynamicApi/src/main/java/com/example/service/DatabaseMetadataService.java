@@ -37,7 +37,7 @@ public class DatabaseMetadataService {
             ResultSet rs = metaData.getTables(null, null, "%", new String[]{"TABLE"});
 
             while (rs.next()) {
-                String schema = rs.getString("TABLE_SCHEM");
+                String schema = rs.getString("TABLE_SCHEMA");
                 String table = rs.getString("TABLE_NAME");
                 schemaTables.computeIfAbsent(schema, k -> new ArrayList<>()).add(table);
             }
@@ -52,7 +52,7 @@ public class DatabaseMetadataService {
             ResultSet rs = metaData.getTables(null, null, "%", new String[]{"TABLE"});
 
             while (rs.next()) {
-                String schema = rs.getString("TABLE_SCHEM");
+                String schema = rs.getString("TABLE_SCHEMA");
 
                 if(!schemaList.isEmpty() && schemaList.contains(schema)) {
                 	String table = rs.getString("TABLE_NAME");
@@ -101,7 +101,7 @@ public class DatabaseMetadataService {
                         case "int8"     -> "bigint";
                         case "serial"   -> "serial";
                         case "bigserial"-> "bigserial";
-//                        case "json", "jsonb" -> "json";
+                        case "json", "jsonb" -> "json";
                         case "varchar"  -> "varchar";
                         case "bpchar"   -> "char";
                         case "timestamptz" -> "timestamp with time zone";

@@ -5,24 +5,43 @@
   padding: 24px 60px 160px;
   background: linear-gradient(135deg, #f5f7fa 0%, #e3e7ed 100%);
   min-height: 100vh;
+ 
 }
 
-/* Header Card */
+
+.mat-mdc-card-header {
+    display: flex;
+    padding: 10px 10px 0;
+    background-color:#3d86c5;
+    color: #fff;
+    align-items: center;
+  
+    
+}
+
+.mat-mdc-card-content {
+  display: block;
+    padding: 5px 10px;
+}
+/* Header Card */ 
 .header-card {
   margin-bottom: 24px;
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
+  margin: 10 auto;
 }
 
-.header-avatar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.header-icon {
+  /* background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); */
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 4px 2px;
 }
+
 
 /* Schema Selection Form */
 .schema-selection-form {
@@ -144,9 +163,10 @@
 }
 
 .search-field {
-  min-width: 300px;
+  margin-top: 15px;
+  min-width: 250px;
   flex: 1;
-  max-width: 400px;
+  max-width: 350px;
 }
 
 .export-button {
@@ -174,7 +194,7 @@
   margin-right: 0;
 }
 
-/* Data Table
+/* Data Table 
 .data-table-container {
   border-radius: 12px;
   overflow: hidden;
@@ -225,7 +245,7 @@
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
-} */
+} 
 
 /* Sticky Actions Column */
 .sticky-actions-header,
@@ -442,7 +462,9 @@
 /* Loading States */
 .mat-mdc-form-field.mat-form-field-disabled {
   opacity: 0.6;
+  
 }
+
 
 /* Success/Error States */
 .mat-mdc-form-field.ng-valid.ng-touched .mat-mdc-form-field-outline {

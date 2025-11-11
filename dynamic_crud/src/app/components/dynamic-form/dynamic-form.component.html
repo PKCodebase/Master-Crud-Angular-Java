@@ -1,30 +1,28 @@
 <div class="dynamic-form-container">
   <mat-card class="header-card">
     <mat-card-header>
-      <div mat-card-avatar class="header-avatar">
-        <mat-icon>dynamic_form</mat-icon>
-      </div>
-      <mat-card-title>Select Schema & Table</mat-card-title>
+     
+      <mat-card-title  >  <mat-icon>dynamic_form</mat-icon>Select Schema & Table</mat-card-title>
     </mat-card-header>
 
     <mat-card-content>
       <form [formGroup]="schemaForm" (ngSubmit)="onSchemaSubmit()" class="schema-selection-form">
         <div class="selection-fields">
-          <mat-form-field appearance="outline" class="selection-field">
+          <mat-form-field appearance="fill" class="selection-field">
             <mat-label>Database Schema</mat-label>
             <mat-select formControlName="schema" (selectionChange)="onSchemaChange()">
               <mat-option *ngFor="let s of schemas" [value]="s">
-                <mat-icon>storage</mat-icon>
+                <mat-icon>list</mat-icon>
                 {{ s }}
               </mat-option>
             </mat-select>
           </mat-form-field>
 
-          <mat-form-field appearance="outline" class="selection-field">
+          <mat-form-field appearance="fill" class="selection-field">
             <mat-label>Database Table</mat-label>
             <mat-select formControlName="table">
               <mat-option *ngFor="let t of tables" [value]="t">
-                <mat-icon>table_chart</mat-icon>
+                <mat-icon>list</mat-icon>
                 {{ t }}
               </mat-option>
             </mat-select>
@@ -32,7 +30,7 @@
         </div>
 
         <div class="action-buttons">
-          <button mat-fab extended color="primary" type="submit">
+          <button mat-raised-button color="primary" type="submit">
             <mat-icon>play_arrow</mat-icon>
             Load Details
           </button>
@@ -80,10 +78,8 @@
   <!-- Dynamic Form Section -->
   <mat-card *ngIf="selectedSchema && selectedTable && isFormReady" class="form-card">
     <mat-card-header>
-      <div mat-card-avatar class="form-avatar">
-        <mat-icon>edit_note</mat-icon>
-      </div>
-      <mat-card-title>Add/Update/Delete Record for <i><b>{{ selectedSchema }}.{{ selectedTable }}</b></i></mat-card-title>
+    
+      <mat-card-title>  <mat-icon>edit_note</mat-icon>Add/Update/Delete Record for <i>{{ selectedSchema }}.{{ selectedTable }}</i></mat-card-title>
     </mat-card-header>
 
     <mat-card-content>
@@ -149,7 +145,7 @@
         </div>
 
         <div class="form-actions">
-          <button mat-fab extended color="primary" type="submit" [disabled]="form.invalid">
+          <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid">
             <mat-icon>{{ selectedRow ? 'update' : 'add' }}</mat-icon>
             {{ selectedRow ? 'Update Record' : 'Add Record' }}
           </button>
@@ -165,17 +161,15 @@
   <!-- Data Table Section -->
   <mat-card *ngIf="selectedSchema && selectedTable && isFormReady" class="table-card">
     <mat-card-header>
-      <div mat-card-avatar class="table-avatar">
-        <mat-icon>table_view</mat-icon>
-      </div>
-      <mat-card-title>Existing Data for <i><b>{{ selectedSchema }}.{{ selectedTable }}</b></i></mat-card-title>
+ 
+      <mat-card-title> <mat-icon>table_view</mat-icon>Existing Data for <i>{{ selectedSchema }}.{{ selectedTable }}</i></mat-card-title>
     </mat-card-header>
 
     <mat-card-content>
       <div class="table-controls">
-        <mat-form-field appearance="outline" class="search-field">
+        <mat-form-field appearance="fill" class="search-field">
           <mat-label>Search Records</mat-label>
-          <input matInput (keyup)="applyFilter($event)" placeholder="Type to filter...">
+          <input matInput (keyup)="applyFilter($event)" placeholder="Search...">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
         

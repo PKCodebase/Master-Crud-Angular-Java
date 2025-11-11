@@ -582,14 +582,67 @@ export class DynamicFormComponent implements OnInit {
     );
   }
 
-  loadData(schema: any, table: any): void {
-    this.formService.getAll(schema, table).subscribe((rows: any[]) => {
-      this.rows = rows;
-      this.dataSource = new MatTableDataSource(rows);
-      this.dataSource.paginator = this.paginator;
-      this.dataSource.sort = this.sort;
+  // loadData(schema: any, table: any): void {
+  //   this.formService.getAll(schema, table).subscribe((rows: any[]) => {
+  //     this.rows = rows;
+  //     this.dataSource = new MatTableDataSource(rows);
+  //     this.dataSource.paginator = this.paginator;
+  //     this.dataSource.sort = this.sort;
+  //   });
+  // }
+
+//   loadData(schema: any, table: any): void {
+//   this.formService.getAll(schema, table).subscribe((rows: any[]) => {
+//     const processedRows = rows.map(row => {
+//       const newRow: any = {};
+//       Object.keys(row).forEach(key => {
+//         const value = row[key];
+//         newRow[key] = (value && typeof value === 'object') ? JSON.stringify(value) : value;
+//       });
+//       return newRow;
+//     });
+
+//     this.rows = processedRows;
+//     this.dataSource = new MatTableDataSource(processedRows);
+//     this.dataSource.paginator = this.paginator;
+//     this.dataSource.sort = this.sort;
+//   });
+// }
+
+loadData(schema: any, table: any): void {
+  this.formService.getAll(schema, table).subscribe((rows: any[]) => {
+    const processedRows = rows.map(row => {
+      const newRow: any = {};
+
+      Object.keys(row).forEach(key => {
+        const value = row[key];
+
+        // Agar value JSON object hai
+        if (value && typeof value === 'object') {
+          // Agar object me 'value' field hai, use hi UI me dikhayein
+          if ('value' in value) {
+            newRow[key] = value.value; // <--- ye user input ka actual value hoga
+          } else {
+            // Agar complex object hai, stringify
+            newRow[key] = JSON.stringify(value);
+          }
+        } else {
+          // Normal value
+          newRow[key] = value;
+        }
+      });
+
+      return newRow;
     });
-  }
+
+    this.rows = processedRows;
+    this.dataSource = new MatTableDataSource(processedRows);
+    this.dataSource.paginator = this.paginator;
+    this.dataSource.sort = this.sort;
+  });
+}
+
+
 
   onEdit(row: any): void {
     this.selectedRow = row;
