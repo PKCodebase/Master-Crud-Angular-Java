@@ -1,240 +1,245 @@
-<div class="dynamic-form-container">
-  <mat-card class="header-card">
-    <mat-card-header>
-     
-      <mat-card-title  >  <mat-icon>dynamic_form</mat-icon>Select Schema & Table</mat-card-title>
-    </mat-card-header>
+<div>
+  <div>
+    <h1 class="data-form">Master Data</h1>
+  </div>
 
-    <mat-card-content>
-      <form [formGroup]="schemaForm" (ngSubmit)="onSchemaSubmit()" class="schema-selection-form">
-        <div class="selection-fields">
-          <mat-form-field appearance="fill" class="selection-field">
-            <mat-label>Database Schema</mat-label>
-            <mat-select formControlName="schema" (selectionChange)="onSchemaChange()">
-              <mat-option *ngFor="let s of schemas" [value]="s">
-                <mat-icon>list</mat-icon>
-                {{ s }}
-              </mat-option>
-            </mat-select>
-          </mat-form-field>
+  <div class="dynamic-form-container">
+    <!-- Schema & Table Selection -->
+    <mat-card class="header-card">
+      <mat-card-header>
+        <mat-card-title>
+          <mat-icon>dynamic_form</mat-icon>
+          Select Schema & Table
+        </mat-card-title>
+      </mat-card-header>
 
-          <mat-form-field appearance="fill" class="selection-field">
-            <mat-label>Database Table</mat-label>
-            <mat-select formControlName="table">
-              <mat-option *ngFor="let t of tables" [value]="t">
-                <mat-icon>list</mat-icon>
-                {{ t }}
-              </mat-option>
-            </mat-select>
-          </mat-form-field>
-        </div>
+      <mat-card-content>
+        <form [formGroup]="schemaForm" (ngSubmit)="onSchemaSubmit()" class="schema-selection-form">
+          <div class="selection-fields">
+            <mat-form-field appearance="fill" class="selection-field">
+              <mat-label class="label">Database Schema</mat-label>
+              <mat-select formControlName="schema" (selectionChange)="onSchemaChange()">
+                <mat-option *ngFor="let s of schemas" [value]="s">
+                  <mat-icon>list</mat-icon> {{ s }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
 
-        <div class="action-buttons">
-          <button mat-raised-button color="primary" type="submit">
-            <mat-icon>play_arrow</mat-icon>
-            Load Details
-          </button>
-          <button mat-stroked-button color="accent" (click)="goBack()">
-            <mat-icon>arrow_back</mat-icon>
-            Back
-          </button>
-        </div>
-      </form>
-    </mat-card-content>
-  </mat-card>
+            <mat-form-field appearance="fill" class="selection-field">
+              <mat-label class="label">Database Table</mat-label>
+              <mat-select formControlName="table">
+                <mat-option *ngFor="let t of tables" [value]="t">
+                  <mat-icon>list</mat-icon> {{ t }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
 
-  <!-- Constraints Section -->
-  <mat-card *ngIf="constraints.length > 0" class="constraints-card">
-    <mat-expansion-panel class="constraints-panel">
-      <mat-expansion-panel-header>
-        <mat-panel-title>
-          <mat-icon>rule</mat-icon>
-          Table Constraints
-        </mat-panel-title>
-        <mat-panel-description>
-          {{ constraints.length }} constraint(s) found
-        </mat-panel-description>
-      </mat-expansion-panel-header>
+          <div class="action-buttons">
+            <button mat-raised-button color="primary" type="submit">
+              <mat-icon>play_arrow</mat-icon> Load Details
+            </button>
+            <button mat-stroked-button color="accent" (click)="goBack()">
+              <mat-icon>arrow_back</mat-icon> Back
+            </button>
+          </div>
+        </form>
+      </mat-card-content>
+    </mat-card>
 
-      <div class="constraints-content">
-        <mat-table [dataSource]="constraints" class="constraints-table">
-          <ng-container matColumnDef="conname">
-            <mat-header-cell *matHeaderCellDef>Constraint Name</mat-header-cell>
-            <mat-cell *matCellDef="let row">{{ row.conname }}</mat-cell>
-          </ng-container>
+    <!-- Constraints -->
+    <mat-card *ngIf="constraints.length > 0" class="constraints-card">
+      <mat-expansion-panel class="constraints-panel">
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon>rule</mat-icon>
+            Table Constraints
+          </mat-panel-title>
+          <mat-panel-description>{{ constraints.length }} constraint(s) found</mat-panel-description>
+        </mat-expansion-panel-header>
 
-          <ng-container matColumnDef="definition">
-            <mat-header-cell *matHeaderCellDef>Definition</mat-header-cell>
-            <mat-cell *matCellDef="let row">{{ row.definition }}</mat-cell>
-          </ng-container>
-
-          <mat-header-row *matHeaderRowDef="['conname','definition']"></mat-header-row>
-          <mat-row *matRowDef="let row; columns: ['conname','definition'];"></mat-row>
-        </mat-table>
-      </div>
-    </mat-expansion-panel>
-  </mat-card>
-
-  <!-- Dynamic Form Section -->
-  <mat-card *ngIf="selectedSchema && selectedTable && isFormReady" class="form-card">
-    <mat-card-header>
-    
-      <mat-card-title>  <mat-icon>edit_note</mat-icon>Add/Update/Delete Record for <i>{{ selectedSchema }}.{{ selectedTable }}</i></mat-card-title>
-    </mat-card-header>
-
-    <mat-card-content>
-      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="data-form">
-        <div class="form-grid">
-          <!-- ✅ Use displayColumns instead of columns to hide auto fields -->
-          <mat-form-field *ngFor="let col of displayColumns" appearance="outline" class="form-field">
-            <mat-label>{{ col.name | titlecase }}</mat-label>
-
-            <!-- Foreign Key Select -->
-            <mat-select *ngIf="col.isForeignKey" [formControlName]="col.name" 
-                       [disabled]="col.autoIncrement || col.primaryKey">
-              <mat-option *ngFor="let option of fkOptions[col.name]" [value]="option.id">
-                {{ option.value }}
-              </mat-option>
-            </mat-select>
-
-            <!-- Date/Timestamp Fields -->
-            <input *ngIf="!col.isForeignKey && (col.type.toLowerCase().includes('timestamp') || col.type.toLowerCase().includes('date'))" 
-                   matInput [matDatepicker]="picker" [formControlName]="col.name" 
-                   [readonly]="col.autoIncrement || col.primaryKey">
-            <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
-            <mat-datepicker #picker></mat-datepicker>
-
-            <!-- Number Fields -->
-            <input *ngIf="!col.isForeignKey && (col.type.includes('int') || col.type.includes('numeric'))" 
-                   matInput type="number" [formControlName]="col.name" 
-                   [readonly]="col.autoIncrement || col.primaryKey">
-
-            <!-- Text Fields -->
-            <input *ngIf="!col.isForeignKey && (col.type.includes('char') || col.type.includes('text') || col.type.includes('varchar'))" 
-                   matInput type="text" [formControlName]="col.name" 
-                   [readonly]="col.autoIncrement || col.primaryKey">
-
-            <!-- Boolean Fields -->
-            <mat-select *ngIf="!col.isForeignKey && (col.type.includes('boolean') || col.type.includes('bool'))" 
-                        [formControlName]="col.name" [disabled]="col.autoIncrement || col.primaryKey">
-              <mat-option [value]="true">
-                <mat-icon>check</mat-icon> True
-              </mat-option>
-              <mat-option [value]="false">
-                <mat-icon>close</mat-icon> False
-              </mat-option>
-            </mat-select>
-
-            <!-- Default Fields -->
-            <input *ngIf="!col.isForeignKey && !col.type.includes('int') && !col.type.includes('numeric') && 
-                          !col.type.includes('char') && !col.type.includes('text') && !col.type.includes('varchar') && 
-                          !col.type.includes('date') && !col.type.includes('timestamp') && 
-                          !col.type.includes('boolean') && !col.type.includes('bool')" 
-                   matInput type="text" [formControlName]="col.name" 
-                   [readonly]="col.autoIncrement || col.primaryKey">
-
-            <!-- Field Icons -->
-            <mat-icon matSuffix *ngIf="col.primaryKey">key</mat-icon>
-            <mat-icon matSuffix *ngIf="col.isForeignKey && !col.primaryKey">link</mat-icon>
-            <mat-icon matSuffix *ngIf="col.autoIncrement">auto_mode</mat-icon>
-
-            <mat-error *ngIf="form.get(col.name)?.invalid && form.get(col.name)?.touched">
-              {{ col.name | titlecase }} is required
-            </mat-error>
-          </mat-form-field>
-        </div>
-
-        <div class="form-actions">
-          <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid">
-            <mat-icon>{{ selectedRow ? 'update' : 'add' }}</mat-icon>
-            {{ selectedRow ? 'Update Record' : 'Add Record' }}
-          </button>
-          <button mat-stroked-button color="warn" type="button" (click)="resetForm()">
-            <mat-icon>clear</mat-icon>
-            Clear Form
-          </button>
-        </div>
-      </form>
-    </mat-card-content>
-  </mat-card>
-
-  <!-- Data Table Section -->
-  <mat-card *ngIf="selectedSchema && selectedTable && isFormReady" class="table-card">
-    <mat-card-header>
- 
-      <mat-card-title> <mat-icon>table_view</mat-icon>Existing Data for <i>{{ selectedSchema }}.{{ selectedTable }}</i></mat-card-title>
-    </mat-card-header>
-
-    <mat-card-content>
-      <div class="table-controls">
-        <mat-form-field appearance="fill" class="search-field">
-          <mat-label>Search Records</mat-label>
-          <input matInput (keyup)="applyFilter($event)" placeholder="Search...">
-          <mat-icon matSuffix>search</mat-icon>
-        </mat-form-field>
-        
-        <button mat-stroked-button [matMenuTriggerFor]="exportMenu" class="export-button">
-          <mat-icon>file_download</mat-icon>
-          Export
-          <mat-icon>expand_more</mat-icon>
-        </button>
-        
-        <mat-menu #exportMenu="matMenu">
-          <button mat-menu-item (click)="exportToExcel()">
-            <mat-icon>description</mat-icon>
-            <span>Excel</span>
-          </button>
-          <button mat-menu-item (click)="exportToPDF()">
-            <mat-icon>picture_as_pdf</mat-icon>
-            <span>PDF</span>
-          </button>
-          <button mat-menu-item (click)="exportToCSV()">
-            <mat-icon>table_chart</mat-icon>
-            <span>CSV</span>
-          </button>
-          <button mat-menu-item (click)="printTable()">
-            <mat-icon>print</mat-icon>
-            <span>Print</span>
-          </button>
-        </mat-menu>
-      </div>
-
-      <div class="data-table-container mat-elevation-z8">
-        <!-- Table Wrapper for Horizontal Scroll -->
-        <div class="table-scroll-wrapper">
-          <table mat-table [dataSource]="dataSource" matSort class="mat-table">
-            
-            <!-- ✅ Dynamic Columns - Only show non-auto fields -->
-            <ng-container *ngFor="let col of displayColumns" [matColumnDef]="col.name">
-              <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ col.name | titlecase }}</th>
-              <td mat-cell *matCellDef="let row">{{ row[col.name] }}</td>
+        <div class="constraints-content">
+          <mat-table [dataSource]="constraints" class="constraints-table">
+            <ng-container matColumnDef="conname">
+              <mat-header-cell *matHeaderCellDef>Constraint Name</mat-header-cell>
+              <mat-cell *matCellDef="let row">{{ row.conname }}</mat-cell>
             </ng-container>
-      
-            <!-- Actions Column -->
-            <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef class="sticky-actions-header">Actions</th>
-              <td mat-cell *matCellDef="let row" class="sticky-actions-cell">
-                <div class="row-actions flex gap-2">
+
+            <ng-container matColumnDef="definition">
+              <mat-header-cell *matHeaderCellDef>Definition</mat-header-cell>
+              <mat-cell *matCellDef="let row">{{ row.definition }}</mat-cell>
+            </ng-container>
+
+            <mat-header-row *matHeaderRowDef="['conname', 'definition']"></mat-header-row>
+            <mat-row *matRowDef="let row; columns: ['conname', 'definition'];"></mat-row>
+          </mat-table>
+        </div>
+      </mat-expansion-panel>
+    </mat-card>
+
+    <!-- Dynamic Form Section -->
+    <mat-card *ngIf="selectedSchema && selectedTable && isFormReady" class="form-card">
+      <mat-card-header>
+        <mat-card-title>
+          <mat-icon>edit_note</mat-icon>
+          Add/Update/Delete Record for <i>{{ selectedSchema }}.{{ selectedTable }}</i>
+        </mat-card-title>
+      </mat-card-header>
+
+      <mat-card-content>
+        <form [formGroup]="form" (ngSubmit)="onSubmit()" class="data-form">
+          <div class="form-grid">
+
+            <ng-container *ngFor="let col of displayColumns">
+
+              <!-- Foreign Key Dropdown -->
+              <mat-form-field *ngIf="col.isForeignKey" appearance="outline" class="form-field">
+                <mat-label>{{ col.name | titlecase }}</mat-label>
+                <mat-select [formControlName]="col.name" [disabled]="col.autoIncrement || col.primaryKey">
+                  <mat-option *ngFor="let option of fkOptions[col.name]" [value]="option.id">
+                    {{ option.value }}
+                  </mat-option>
+                </mat-select>
+                <mat-icon matSuffix>link</mat-icon>
+                <mat-error *ngIf="form.get(col.name)?.invalid && form.get(col.name)?.touched">
+                  {{ col.name | titlecase }} is required
+                </mat-error>
+              </mat-form-field>
+
+              <!-- Check Constraint Dropdown -->
+              <mat-form-field *ngIf="col.hasCheckConstraint" appearance="outline" class="form-field">
+                <mat-label>{{ col.name | titlecase }}</mat-label>
+                <mat-select [formControlName]="col.name">
+                  <mat-option *ngFor="let val of checkOptions[col.name]" [value]="val">
+                    {{ val }}
+                  </mat-option>
+                </mat-select>
+                <mat-error *ngIf="form.get(col.name)?.invalid && form.get(col.name)?.touched">
+                  {{ col.name | titlecase }} is required
+                </mat-error>
+              </mat-form-field>
+
+              <!-- Date / Timestamp -->
+              <mat-form-field *ngIf="!col.isForeignKey && !col.hasCheckConstraint && (col.type.toLowerCase().includes('timestamp') || col.type.toLowerCase().includes('date'))" appearance="outline" class="form-field">
+                <mat-label>{{ col.name | titlecase }}</mat-label>
+                <input matInput [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey" />
+                <mat-error *ngIf="form.get(col.name)?.invalid && form.get(col.name)?.touched">
+                  {{ col.name | titlecase }} is required
+                </mat-error>
+              </mat-form-field>
+
+              <!-- Numeric Fields -->
+              <mat-form-field *ngIf="!col.isForeignKey && !col.hasCheckConstraint && (col.type.includes('int') || col.type.includes('numeric'))" appearance="outline" class="form-field">
+                <mat-label>{{ col.name | titlecase }}</mat-label>
+                <input matInput type="number" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey" />
+                <mat-error *ngIf="form.get(col.name)?.invalid && form.get(col.name)?.touched">
+                  {{ col.name | titlecase }} is required
+                </mat-error>
+              </mat-form-field>
+
+              <!-- Text Fields -->
+              <mat-form-field *ngIf="!col.isForeignKey && !col.hasCheckConstraint && (col.type.includes('char') || col.type.includes('text') || col.type.includes('varchar'))" appearance="outline" class="form-field">
+                <mat-label>{{ col.name | titlecase }}</mat-label>
+                <input matInput type="text" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey" />
+                <mat-error *ngIf="form.get(col.name)?.invalid && form.get(col.name)?.touched">
+                  {{ col.name | titlecase }} is required
+                </mat-error>
+              </mat-form-field>
+
+              <!-- Boolean -->
+              <mat-form-field *ngIf="!col.isForeignKey && !col.hasCheckConstraint && (col.type.includes('boolean') || col.type.includes('bool'))" appearance="outline" class="form-field">
+                <mat-label>{{ col.name | titlecase }}</mat-label>
+                <mat-select [formControlName]="col.name" [disabled]="col.autoIncrement || col.primaryKey">
+                  <mat-option [value]="true"><mat-icon>check</mat-icon> True</mat-option>
+                  <mat-option [value]="false"><mat-icon>close</mat-icon> False</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <!-- Default Fallback -->
+              <mat-form-field *ngIf="!col.isForeignKey && !col.hasCheckConstraint && !col.type.includes('int') && !col.type.includes('numeric') && !col.type.includes('char') && !col.type.includes('text') && !col.type.includes('varchar') && !col.type.includes('date') && !col.type.includes('timestamp') && !col.type.includes('boolean') && !col.type.includes('bool')" appearance="outline" class="form-field">
+                <mat-label>{{ col.name | titlecase }}</mat-label>
+                <input matInput type="text" [formControlName]="col.name" [readonly]="col.autoIncrement || col.primaryKey" />
+              </mat-form-field>
+
+            </ng-container>
+          </div>
+
+          <!-- Buttons -->
+          <div class="form-actions">
+            <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid">
+              <mat-icon>{{ selectedRow ? 'update' : 'add' }}</mat-icon>
+              {{ selectedRow ? 'Update Record' : 'Add Record' }}
+            </button>
+
+            <button mat-stroked-button color="warn" type="button" (click)="resetForm()">
+              <mat-icon>clear</mat-icon> Clear Form
+            </button>
+          </div>
+        </form>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Table -->
+    <mat-card *ngIf="selectedSchema && selectedTable && isFormReady" class="table-card">
+      <mat-card-header>
+        <mat-card-title>
+          <mat-icon>table_view</mat-icon>
+          Existing Data for <i>{{ selectedSchema }}.{{ selectedTable }}</i>
+        </mat-card-title>
+      </mat-card-header>
+
+      <mat-card-content>
+        <div class="table-controls">
+          <mat-form-field appearance="fill" class="search-field">
+            <mat-label>Search Records</mat-label>
+            <input matInput (keyup)="applyFilter($event)" placeholder="Search..." />
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
+
+          <button mat-stroked-button [matMenuTriggerFor]="exportMenu" class="export-button">
+            <mat-icon>file_download</mat-icon>
+            Export <mat-icon>expand_more</mat-icon>
+          </button>
+
+          <mat-menu #exportMenu="matMenu">
+            <button mat-menu-item (click)="exportToExcel()"><mat-icon>description</mat-icon> Excel</button>
+            <button mat-menu-item (click)="exportToPDF()"><mat-icon>picture_as_pdf</mat-icon> PDF</button>
+            <button mat-menu-item (click)="exportToCSV()"><mat-icon>table_chart</mat-icon> CSV</button>
+            <button mat-menu-item (click)="printTable()"><mat-icon>print</mat-icon> Print</button>
+          </mat-menu>
+        </div>
+
+        <div class="data-table-container mat-elevation-z8">
+          <div class="table-scroll-wrapper">
+            <table mat-table [dataSource]="dataSource" matSort class="mat-table">
+              <ng-container *ngFor="let col of displayColumns" [matColumnDef]="col.name">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ col.name | titlecase }}</th>
+                <!-- <td mat-cell *matCellDef="let row">{{ row[col.name] }}</td> -->
+                <td mat-cell *matCellDef="let row">{{ toDisplayString(row[col.name]) }}</td>
+
+
+              </ng-container>
+
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef class="sticky-actions-header">Actions</th>
+                <td mat-cell *matCellDef="let row" class="sticky-actions-cell">
                   <button mat-icon-button color="primary" (click)="editRow(row)" matTooltip="Edit">
                     <mat-icon>edit</mat-icon>
                   </button>
                   <button mat-icon-button color="warn" (click)="onDelete(row)" matTooltip="Delete">
                     <mat-icon>delete</mat-icon>
                   </button>
-                </div>
-              </td>
-            </ng-container>
-      
-            <!-- Header + Row -->
-            <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-          </table>
+                </td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+            </table>
+          </div>
+
+          <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons></mat-paginator>
         </div>
-      
-        <!-- Paginator -->
-        <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons aria-label="Select page">
-        </mat-paginator>
-      </div>
-    </mat-card-content>
-  </mat-card>
+      </mat-card-content>
+    </mat-card>
+  </div>
 </div>

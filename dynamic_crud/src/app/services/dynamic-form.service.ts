@@ -26,6 +26,18 @@ export class DynamicFormService {
     return this.http.get<{ [schema: string]: string[] }>(`${this.baseUrl}/tables`);
   }
 
+
+// getCheckConstraintValues(table: string, column: string): Observable<string[]> {
+//   return this.http.get<string[]>(`${this.baseUrl}/dropdown/check/${table}/${column}`);
+// }
+getCheckConstraintValues(table: string, column: string): Observable<string[]> {
+  const url = `${this.baseUrl}/check/${table}/${column}`;
+  console.log('✅ Calling:', url);
+  return this.http.get<string[]>(url);
+}
+
+
+
     getColumns(schema: string, table: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/${schema}/${table}/columns`);
   }

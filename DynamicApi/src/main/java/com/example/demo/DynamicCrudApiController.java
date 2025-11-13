@@ -42,19 +42,26 @@ public class DynamicCrudApiController {
     @Autowired
     private DatabaseMetadataService metadataService;
 
-
-//    private final NetworkUtils networkUtils;
-
     private static final Logger log = LoggerFactory.getLogger(DynamicCrudApiController.class);
 
-//    public DynamicCrudApiController(NetworkUtils networkUtils) {
-//        this.networkUtils = networkUtils;
-//    }
 
     @GetMapping("/hello")
     public String hello() {
         return "Hello, Spring Boot!";
     }
+
+    @GetMapping("/check/{table}/{column}")
+    public ResponseEntity<List<String>> getCheckDropdown(
+            @PathVariable String table,
+            @PathVariable String column) {
+
+        List<String> values = metadataService.getCheckConstraintValues(table, column);
+        System.out.println("API Response for " + column + " → " + values);
+        return ResponseEntity.ok(values);
+    }
+
+
+
 
     // List tables per schema
     @GetMapping("/tables")
@@ -210,67 +217,7 @@ public class DynamicCrudApiController {
         return jdbcTemplate.queryForList(sql.toString(), values.toArray());
     }
 
-    // Insert row
-//    @PostMapping("/{schema}/{table}")
-//    public Map<String, Object> insertRow(
-//            @PathVariable String schema,
-//            @PathVariable String table,
-//            @RequestBody Map<String, Object> rowData) throws SQLException {
-//
-//    		List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
-//
-//            // Identify primary keys
-//            List<String> pkColumns = metadataService.getPrimaryKeys(schema, table);
-//
-//            // Build insertable columns (exclude serial/identity PKs)
-//            List<String> insertableCols = new ArrayList<>();
-//            List<Object> values = new ArrayList<>();
-//
-//            for (Map<String, Object> col : columns) {
-////                String colName = (String) col.get("column_name");
-////                String dataType = (String) col.get("data_type");
-//            	String colName = (String) col.get("name");
-//            	String dataType = (String) col.get("type");
-//
-//                if (pkColumns.contains(colName)) {
-//                    // Skip PK if auto-generated
-//                    continue;
-//                }
-//
-//                if (rowData.containsKey(colName)) {
-//                	Object val = rowData.get(colName);
-//
-//                    // Skip null or empty string
-//                    if (val == null || val.toString().trim().isEmpty()) {
-//                        continue;
-//                    }
-//
-//                    insertableCols.add(colName);
-//
-//                    Object colVal = convertValue(val, dataType);
-//                    try {
-//                    	values.add(colVal);
-//                    } catch (NumberFormatException e) {
-//                        throw new RuntimeException("Invalid value for column: " + colName + " (" + dataType + ")");
-//                    }
-//                }
-//            }
-//
-//            if (insertableCols.isEmpty()) {
-//                return Map.of("status", "failed", "message", "No valid columns provided for insert");
-//            }
-//
-//            // SQL query
-//            String colNames = String.join(", ", insertableCols);
-//            String placeholders = String.join(", ", Collections.nCopies(insertableCols.size(), "?"));
-//
-//            String sql = String.format("INSERT INTO %s.%s (%s) VALUES (%s)", schema, table, colNames, placeholders);
-//
-//            jdbcTemplate.update(sql, values.toArray());
-//
-//            return Map.of("status", "success", "message", "Row inserted successfully");
-//
-//   }
+
 
 @PostMapping("/{schema}/{table}")
 public Map<String, Object> insertRow(
@@ -283,21 +230,18 @@ public Map<String, Object> insertRow(
     List<String> pkColumns = metadataService.getPrimaryKeys(schema, table);
 
     // 1️⃣ Auto system fields
-//    String currentUser = getCurrentUsername(); // JWT / SecurityContext se
     String currentUser = "System";
-    LocalDateTime  now = LocalDateTime.now();
+    LocalDateTime now = LocalDateTime.now();
 
-    // Common auto fields
     Map<String, Object> autoFields = new HashMap<>();
-//    autoFields.put("api_service_guid", UUID.randomUUID().toString());
-    autoFields.put("created_by",currentUser );
+    autoFields.put("created_by", currentUser);
     autoFields.put("created_date", now);
+    autoFields.put("created_uri", request.getRequestURL().toString());
+    autoFields.put("modified_uri", request.getRequestURL().toString());
     autoFields.put("created_ip_addr", IPUtil.getClientIp(request));
-    autoFields.put("api_service_url",request.getRequestURL());
-//    autoFields.put("created_mac_addr", NetworkUtils.generateRandomMacAddress());
+    autoFields.put("api_service_url", request.getRequestURL());
     autoFields.putIfAbsent("status", "ACTIVE");
 
-    // Merge frontend data + auto fields
     Map<String, Object> finalData = new HashMap<>(rowData);
     finalData.putAll(autoFields);
 
@@ -325,77 +269,34 @@ public Map<String, Object> insertRow(
         return Map.of("status", "failed", "message", "No valid columns provided for insert");
     }
 
-    // 3️⃣ Execute insert
+    // 3️⃣ Prepare SQL
     String colNames = String.join(", ", insertableCols);
     String placeholders = String.join(", ", Collections.nCopies(insertableCols.size(), "?"));
     String sql = String.format("INSERT INTO %s.%s (%s) VALUES (%s)", schema, table, colNames, placeholders);
 
-    jdbcTemplate.update(sql, values.toArray());
-
-    return Map.of("status", "success", "message", "Row inserted successfully", "data", finalData);
+    try {
+        jdbcTemplate.update(sql, values.toArray());
+        return Map.of("status", "success", "message", "Row inserted successfully", "data", finalData);
+    }
+    catch (org.springframework.dao.DataIntegrityViolationException e) {
+        Throwable rootCause = e.getRootCause();
+        if (rootCause != null && rootCause.getMessage() != null && rootCause.getMessage().contains("duplicate key value")) {
+            // Extract constraint name (optional)
+            String detail = "";
+            if (rootCause.getMessage().contains("Detail:")) {
+                detail = rootCause.getMessage().substring(rootCause.getMessage().indexOf("Detail:")).trim();
+            }
+            return Map.of(
+                    "status", "error",
+                    "message", "Duplicate record exists. " + detail
+            );
+        }
+        throw e; // rethrow others
+    }
+    catch (Exception ex) {
+        return Map.of("status", "error", "message", "Insert failed: " + ex.getMessage());
+    }
 }
-
-//
-//    @PutMapping("/{schema}/{table}/{id}")
-//    public int updateRow(
-//            @PathVariable String schema,
-//            @PathVariable String table,
-//            @PathVariable String id,
-//            @RequestBody Map<String, Object> rowData) throws SQLException {
-//
-//        // Get PKs
-//        List<String> pkColumns = metadataService.getPrimaryKeys(schema, table);
-//        if (pkColumns.isEmpty()) {
-//            throw new RuntimeException("No primary key defined for " + schema + "." + table);
-//        }
-//        String pk = pkColumns.get(0);
-//
-//        // Get column metadata
-//        List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
-//
-//        // Build SET clause dynamically
-//        List<String> updatableCols = new ArrayList<>();
-//        List<Object> values = new ArrayList<>();
-//
-//        for (Map<String, Object> col : columns) {
-//            String colName = (String) col.get("name");
-//            String dataType = (String) col.get("type");
-//
-//            // Skip auto PKs
-//            if (pkColumns.contains(colName)) {
-//                continue;
-//            }
-//
-//            if (rowData.containsKey(colName)) {
-//                Object val = rowData.get(colName);
-//
-//                // Skip null/empty
-//                if (val == null || val.toString().trim().isEmpty()) {
-//                    continue;
-//                }
-//
-//                // Add column to update list
-//                updatableCols.add(colName + " = ?");
-//
-//                // Convert type properly (like insert)
-//                Object colVal = convertValue(val, dataType);
-//                values.add(colVal);
-//            }
-//        }
-//
-//        if (updatableCols.isEmpty()) {
-//            throw new RuntimeException("No updatable columns provided for " + schema + "." + table);
-//        }
-//
-//        // Build SQL
-//        String setClause = String.join(", ", updatableCols);
-//        String sql = "UPDATE " + schema + "." + table + " SET " + setClause + " WHERE " + pk + " = ?";
-//
-//        // Add PK value at end
-//        values.add(convertValue(id, getColumnType(columns, pk)));
-//
-//        return jdbcTemplate.update(sql, values.toArray());
-//    }
 
     @PutMapping("/{schema}/{table}/{id}")
     public int updateRow(
@@ -420,9 +321,11 @@ public Map<String, Object> insertRow(
 
         rowData.put("modified_by", currentUser);
         rowData.put("modified_date",  LocalDateTime.now());
+        rowData.put("created_uri", request.getRequestURL().toString());
+        rowData.put("modified_uri", request.getRequestURL().toString());
         rowData.put("modified_ip_addr",  IPUtil.getClientIp(request));
         rowData.put("api_service_url",request.getRequestURL());
-//        rowData.put("modified_mac_addr", NetworkUtils.generateRandomMacAddress());
+
 
 
         // 2️⃣ Build SET clause
@@ -471,29 +374,43 @@ public Map<String, Object> insertRow(
 
     private Object convertValue(Object value, String dataType) {
         if (value == null) return null;
-        String str = value.toString();
+        String str = value.toString().trim();
 
         switch (dataType.toLowerCase()) {
-        	case "bigserial":
+            case "bigserial":
             case "bigint":
             case "integer":
             case "smallint":
                 return Long.valueOf(str);
+
             case "numeric":
             case "decimal":
                 return new java.math.BigDecimal(str);
+
             case "bool":
             case "boolean":
                 return Boolean.valueOf(str);
+
             case "date":
                 return java.sql.Date.valueOf(str);
+
             case "json":
             case "jsonb":
                 try {
                     org.postgresql.util.PGobject jsonObject = new org.postgresql.util.PGobject();
                     jsonObject.setType("jsonb");
-                    // Wrap plain string in quotes so it becomes valid JSON
-                    jsonObject.setValue("\"" + str.replace("\"", "\\\"") + "\"");
+
+                    String jsonString = str.trim();
+
+                    // ✅ Handle cases where user typed plain text like abc or [1,2,3] or {"key":"value"}
+                    if (jsonString.startsWith("{") || jsonString.startsWith("[") || jsonString.equalsIgnoreCase("null")) {
+                        // valid JSON string — use as-is
+                        jsonObject.setValue(jsonString);
+                    } else {
+                        // Not valid JSON → wrap as quoted string
+                        jsonObject.setValue("\"" + jsonString.replace("\"", "\\\"") + "\"");
+                    }
+
                     return jsonObject;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to convert value to JSONB: " + str, e);
@@ -504,38 +421,31 @@ public Map<String, Object> insertRow(
             case "timestamptz":
             case "timestamp with time zone":
                 try {
-                    // First try normal ISO parsing
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
                     String cleanedStr = str;
-
-                    // Truncate nanoseconds if present
                     int dotIndex = str.indexOf(".");
                     if (dotIndex != -1) {
                         cleanedStr = str.substring(0, dotIndex);
                     }
-
                     LocalDateTime ldt = LocalDateTime.parse(cleanedStr, formatter);
                     return Timestamp.valueOf(ldt);
                 } catch (DateTimeParseException e) {
-                    // fallback: just try Timestamp.valueOf directly
                     return Timestamp.valueOf(str.replace("T", " "));
                 }
-
 
             case "time":
             case "timetz":
             case "time with time zone":
                 if (str.contains("+")) {
-                    return Time.valueOf(str.split("\\+")[0]); // drop timezone offset
+                    return Time.valueOf(str.split("\\+")[0]);
                 } else {
                     return Time.valueOf(str);
                 }
+
             default:
-                return str; // fallback: varchar, text
+                return str; // fallback: varchar, text, etc.
         }
     }
-
-
 
     // Delete by PK
     @DeleteMapping("/{schema}/{table}/{id}")
@@ -554,68 +464,7 @@ public Map<String, Object> insertRow(
         return jdbcTemplate.update(sql, id);
     }
 
- // Define formatter compatible with <input type="datetime-local">
-//    private static final DateTimeFormatter HTML5_DATE_TIME =
-//            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
-//    private Object normalizeValue(String type, Object value) {
-//        if (value == null) return null;
-//
-//        try {
-//            if (type != null && type.toLowerCase().contains("timestamp")) {
-//                if (value instanceof Timestamp ts) {
-//                    return ts.toLocalDateTime().format(HTML5_DATE_TIME);
-//                }
-//                if (value instanceof OffsetDateTime odt) {
-//                    return odt.toLocalDateTime().format(HTML5_DATE_TIME);
-//                }
-//                if (value instanceof LocalDateTime ldt) {
-//                    return ldt.format(HTML5_DATE_TIME);
-//                }
-//                // Last fallback: try parsing string
-//                return LocalDateTime.parse(value.toString().replace("Z",""))
-//                        .format(HTML5_DATE_TIME);
-//            }
-//        } catch (Exception e) {
-//            // Fallback: return original
-//            return value.toString();
-//        }
-//
-//        return value;
-//    }
-
-//    @GetMapping("/{schema}/{table}/fk-values/{column}")
-//    public List<Map<String, Object>> getForeignKeyValues(
-//            @PathVariable String schema,
-//            @PathVariable String table,
-//            @PathVariable String column) throws SQLException {
-//
-//        // Get FK metadata
-//    	//System.err.println("-----------------");
-//        List<Map<String, Object>> fks = metadataService.getForeignKeys(schema, table);
-//        Map<String, Object> fkInfo = fks.stream()
-//                .filter(fk -> fk.get("fkColumn").equals(column))
-//                .findFirst()
-//                .orElseThrow(() -> new RuntimeException("No FK found for column " + column));
-//
-//        String pkTable = (String) fkInfo.get("pkTable");
-//        String pkTableSchema = (String) fkInfo.get("pkTableSchema");
-////        String pkColumn = (String) fkInfo.get("pkColumn");
-////        String pkColumnValue = (String) fkInfo.get("displayColumn");
-////        if(!pkColumnValue.isBlank() && !pkColumnValue.equalsIgnoreCase("NONE")) {
-////        	pkColumnValue = ", "+pkColumnValue+" as value ";
-////        }else {
-////        	pkColumnValue = ", "+pkColumn+" as value ";
-////        }
-//
-//        //String sql = "SELECT " + pkColumn + " as id FROM " + schema + "." + pkTable;
-//        //String sql = "SELECT " + pkColumn + " as id"+pkColumnValue+" FROM " + pkTableSchema + "." + pkTable;
-//        String dropdown = getDropdownColumnsForFerignKeys(pkTableSchema, pkTable);
-//        String sql = "SELECT " + dropdown + " FROM " + pkTableSchema + "." + pkTable;
-//        return jdbcTemplate.queryForList(sql);
-//    }
-
-//Exact
 
 @GetMapping("/{schema}/{table}/fk-values/{column}")
 public List<Map<String, Object>> getForeignKeyValues(
@@ -643,32 +492,6 @@ public List<Map<String, Object>> getForeignKeyValues(
 
     return jdbcTemplate.queryForList(sql);
 }
-//@GetMapping("/{schema}/{table}/fk-values/{column}")
-//public List<Map<String, Object>> getForeignKeyValues(
-//        @PathVariable String schema,
-//        @PathVariable String table,
-//        @PathVariable String column) {
-//
-//    List<Map<String, Object>> fks = metadataService.getForeignKeys(schema, table);
-//
-//    // Filter by requested column
-//    Map<String, Object> fkInfo = fks.stream()
-//            .filter(fk -> fk.get("fkColumn").equals(column))
-//            .findFirst()
-//            .orElseThrow(() -> new RuntimeException("No FK found for column " + column));
-//
-//    String pkTable = (String) fkInfo.get("pkTable");
-//    String pkTableSchema = (String) fkInfo.get("pkTableSchema");
-//    String pkColumn = (String) fkInfo.get("pkColumn");
-//    String displayColumn = (String) fkInfo.get("displayColumn");
-//
-//    String sql = "SELECT \"" + pkColumn + "\" as id, \"" + displayColumn + "\" as value FROM "
-//            + pkTableSchema + "." + pkTable;
-//
-//    return jdbcTemplate.queryForList(sql);
-//}
-//
-
 
 
 
@@ -744,11 +567,6 @@ public List<Map<String, Object>> getForeignKeyValues(
         return jdbcTemplate.queryForList(sql, schema, table);
     }
 
-//    @GetMapping("/schemas")
-//    public List<String> getSchemas() {
-//        return metadataService.getAllSchemas();
-//    }
-
     // ✅ API to fetch all schemas
     @GetMapping("/schemas")
     public ResponseEntity<List<String>> getAllSchemas() {
@@ -761,16 +579,7 @@ public List<Map<String, Object>> getForeignKeyValues(
         return ResponseEntity.ok(metadataService.getTablesBySchema(schema));
     }
 
-//    @GetMapping("/tables/{schema}")
-//    public ResponseEntity<List<String>> getTables(@PathVariable String schema) {
-//        // Validate schema
-//        if (!Arrays.asList("mst", "adm").contains(schema.toLowerCase())) {
-//            return ResponseEntity.badRequest()
-//                    .body(Collections.emptyList());
-//        }
-//
-//        List<String> tables = metadataService.getTablesBySchema(schema.toLowerCase());
-//        return ResponseEntity.ok(tables);
-//    }
+
+
 
 }

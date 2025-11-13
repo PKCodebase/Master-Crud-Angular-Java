@@ -460,12 +460,14 @@ export class DynamicFormComponent implements OnInit {
 
   fkOptions: { [key: string]: any[] } = {};
   filteredFkOptions: { [key: string]: any[] } = {};
+  checkOptions: { [key: string]: string[] } = {};
+  
 
   constraints: any[] = [];
 
   // ✅ Audit/auto fields - these will be hidden from UI
   autoFields: string[] = [
-    'created_ip_addr', 'created_by', 'created_mac_addr', 'created_date',
+    'created_ip_addr', 'created_by', 'created_mac_addr', 'created_date','created_uri','modified_uri',
     'modified_ip_addr', 'modified_by', 'modified_date', 'modified_mac_addr'
     ,'api_service_url'
   ];
@@ -524,56 +526,50 @@ export class DynamicFormComponent implements OnInit {
     this.dataSource.sort = this.sort;
   }
 
-  loadMetadata(schema: any, table: any): void {
-    this.formService.getColumns(schema, table).subscribe(cols => {
-      // Store all columns including auto fields
-      this.columns = cols;
+loadMetadata(schema: any, table: any): void {
+  this.formService.getColumns(schema, table).subscribe(cols => {
+    this.columns = cols;
+    this.fkOptions = {};
+    this.checkOptions = {};
 
-      // Reset FK options to avoid duplicates
-      this.fkOptions = {};
+    // Fetch FK values and Check constraint dropdowns
+    this.displayColumns.forEach(col => {
+      // 🔹 Load FK dropdowns
+      if (col.isForeignKey) {
+        this.formService.getForeignKeyValues(schema, table, col.name)
+          .subscribe(values => this.fkOptions[col.name] = values);
+      }
 
-      // fetch FK values only for display columns
-      this.displayColumns.forEach(col => {
-        if (col.isForeignKey) {
-          this.formService.getForeignKeyValues(schema, table, col.name)
-            .subscribe(values => this.fkOptions[col.name] = values);
-        }
-      });
+      // 🔹 Load CHECK constraint dropdowns
+     this.formService.getCheckConstraintValues(`${schema}.${table}`, col.name)
+  .subscribe(values => {
+    console.log(`✅ Check values for ${col.name}:`, values);
+    if (values && values.length > 0) {
+      this.checkOptions[col.name] = values;
+      col.hasCheckConstraint = true;
+    }
+  });
 
-      const group: { [key: string]: any } = {};
-      
-      // Create form controls for ALL columns (including auto fields)
-      this.columns.forEach(col => {
-        const validators = col.nullable ? [] : [Validators.required];
-      
-        let value = '';
-      
-        if (col.type.toLowerCase().includes('timestamp')) {
-          value = this.normalizeTimestamp(col.defaultValue || '');
-        }
-
-        // ✅ Disable auto fields and auto-increment/primary keys
-        group[col.name] = this.fb.control(
-          { 
-            value: value, 
-            disabled: col.autoIncrement || col.primaryKey || this.autoFields.includes(col.name) 
-          },
-          validators
-        );
-      });
-
-      this.form = this.fb.group(group);
-      this.isFormReady = true;
-      
-      // ✅ Only show non-auto fields in the table
-      this.displayedColumns = [
-        ...this.displayColumns.map(c => c.name), 
-        'actions'
-      ];
     });
 
-    this.loadConstraints(schema, table);
-  }
+    // Build form dynamically
+    const group: { [key: string]: any } = {};
+    this.columns.forEach(col => {
+      const validators = col.nullable ? [] : [Validators.required];
+      group[col.name] = this.fb.control(
+        { value: '', disabled: col.autoIncrement || col.primaryKey || this.autoFields.includes(col.name) },
+        validators
+      );
+    });
+
+    this.form = this.fb.group(group);
+    this.isFormReady = true;
+    this.displayedColumns = [...this.displayColumns.map(c => c.name), 'actions'];
+  });
+
+  // Also fetch constraints for debugging / table view
+  this.loadConstraints(schema, table);
+}
 
   onFilterFk(colName: string, event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value.toLowerCase();
@@ -582,67 +578,14 @@ export class DynamicFormComponent implements OnInit {
     );
   }
 
-  // loadData(schema: any, table: any): void {
-  //   this.formService.getAll(schema, table).subscribe((rows: any[]) => {
-  //     this.rows = rows;
-  //     this.dataSource = new MatTableDataSource(rows);
-  //     this.dataSource.paginator = this.paginator;
-  //     this.dataSource.sort = this.sort;
-  //   });
-  // }
-
-//   loadData(schema: any, table: any): void {
-//   this.formService.getAll(schema, table).subscribe((rows: any[]) => {
-//     const processedRows = rows.map(row => {
-//       const newRow: any = {};
-//       Object.keys(row).forEach(key => {
-//         const value = row[key];
-//         newRow[key] = (value && typeof value === 'object') ? JSON.stringify(value) : value;
-//       });
-//       return newRow;
-//     });
-
-//     this.rows = processedRows;
-//     this.dataSource = new MatTableDataSource(processedRows);
-//     this.dataSource.paginator = this.paginator;
-//     this.dataSource.sort = this.sort;
-//   });
-// }
-
-loadData(schema: any, table: any): void {
-  this.formService.getAll(schema, table).subscribe((rows: any[]) => {
-    const processedRows = rows.map(row => {
-      const newRow: any = {};
-
-      Object.keys(row).forEach(key => {
-        const value = row[key];
-
-        // Agar value JSON object hai
-        if (value && typeof value === 'object') {
-          // Agar object me 'value' field hai, use hi UI me dikhayein
-          if ('value' in value) {
-            newRow[key] = value.value; // <--- ye user input ka actual value hoga
-          } else {
-            // Agar complex object hai, stringify
-            newRow[key] = JSON.stringify(value);
-          }
-        } else {
-          // Normal value
-          newRow[key] = value;
-        }
-      });
-
-      return newRow;
+  loadData(schema: any, table: any): void {
+    this.formService.getAll(schema, table).subscribe((rows: any[]) => {
+      this.rows = rows;
+      this.dataSource = new MatTableDataSource(rows);
+      this.dataSource.paginator = this.paginator;
+      this.dataSource.sort = this.sort;
     });
-
-    this.rows = processedRows;
-    this.dataSource = new MatTableDataSource(processedRows);
-    this.dataSource.paginator = this.paginator;
-    this.dataSource.sort = this.sort;
-  });
-}
-
-
+  }
 
   onEdit(row: any): void {
     this.selectedRow = row;
@@ -755,11 +698,30 @@ loadData(schema: any, table: any): void {
     this.router.navigate(['/dynamic-form']);
   }
 
-  loadConstraints(schema: string, table: string): void {
-    this.formService.getConstraints(schema, table).subscribe(res => {
-      this.constraints = res;
+  // loadConstraints(schema: string, table: string): void {
+  //   this.formService.getConstraints(schema, table).subscribe(res => {
+  //     this.constraints = res;
+  //   });
+  // }
+loadConstraints(schema: string, table: string): void {
+  this.formService.getConstraints(schema, table).subscribe(res => {
+    this.constraints = res;
+    console.log("✅ Constraints fetched:", res);
+
+    // 🔹 Call check constraint API for each column
+    this.displayColumns.forEach(col => {
+      this.formService.getCheckConstraintValues(`${schema}.${table}`, col.name)
+        .subscribe(values => {
+          console.log(`✅ Check constraint values for ${col.name}:`, values);
+          if (values && values.length > 0) {
+            this.checkOptions[col.name] = values;
+            col.hasCheckConstraint = true;
+          }
+        });
     });
-  }
+  });
+}
+
 
   exportToExcel(): void {
     const data = this.dataSource.filteredData || this.dataSource.data;
@@ -779,6 +741,38 @@ loadData(schema: any, table: any): void {
   exportToPDF(): void {
     window.print();
   }
+ toDisplayString(value: any): string {
+  if (value === null || value === undefined) return '';
+
+  // ✅ If backend sends object like { type:'json', value:'"21"', null:false }
+  if (typeof value === 'object' && value.value !== undefined) {
+    try {
+      // if value.value itself is a quoted string, unwrap it
+      const inner = value.value;
+      return typeof inner === 'string' && inner.startsWith('"') && inner.endsWith('"')
+        ? inner.slice(1, -1)
+        : inner;
+    } catch {
+      return String(value.value);
+    }
+  }
+
+  // ✅ If it's a string that looks like JSON, parse it to clean it up
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed === 'string' || typeof parsed === 'number') {
+        return String(parsed);
+      }
+    } catch {
+      return value;
+    }
+  }
+
+  // ✅ Fallback for any other type
+  return String(value);
+}
+
 
   exportToCSV(): void {
     const data = this.dataSource.filteredData || this.dataSource.data;

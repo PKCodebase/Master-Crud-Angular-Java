@@ -5,6 +5,8 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 
@@ -186,55 +188,6 @@ public class DatabaseMetadataService {
         return fks;
     }
 
-//    public List<Map<String, Object>> getForeignKeys(String schema, String table) {
-//        List<Map<String, Object>> fks = new ArrayList<>();
-//
-//        String keyProp = env.getProperty(schema + "." + table + ".key");
-//        String valProp = env.getProperty(schema + "." + table + ".val");
-//        String displayProp = env.getProperty(schema + "." + table + ".display", valProp); // fallback to val
-//
-//        if (keyProp != null && valProp != null) {
-//            String sql = "SELECT \"" + keyProp + "\" as id, \"" + displayProp + "\" as value FROM " + schema + "." + table;
-//            try {
-//                List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
-//                fks.addAll(results);
-//            } catch (Exception e) {
-//                System.out.println("Error fetching FK values: " + e.getMessage());
-//            }
-//        }
-//
-//        return fks;
-//    }
-
-//    public List<Map<String, Object>> getForeignKeys(String schema, String table) {
-//
-//        String keyProp = env.getProperty(schema + "." + table + ".key");
-//        String valProp = env.getProperty(schema + "." + table + ".val");
-//
-//        if (keyProp == null || valProp == null) {
-//            throw new RuntimeException("Properties not defined for table: " + schema + "." + table);
-//        }
-//
-//        String sql = "SELECT \"" + keyProp + "\" as id, \"" + valProp + "\" as value FROM " + schema + "." + table;
-//        System.out.println("Executing SQL from properties: " + sql);
-//
-//        List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
-//
-//        // Wrap results with fk info
-//        List<Map<String, Object>> fks = new ArrayList<>();
-//        for (Map<String, Object> row : results) {
-//            Map<String, Object> fk = new HashMap<>();
-//            fk.put("fkColumn", keyProp);
-//            fk.put("pkTableSchema", schema);
-//            fk.put("pkTable", table);
-//            fk.put("pkColumn", keyProp);
-//            fk.put("displayColumn", valProp);
-//            fks.add(fk);
-//        }
-//
-//        return fks;
-//    }
-
     public String getColumnType(String schema, String table, String column) {
         List<String> result = jdbcTemplate.query(
             "SELECT data_type FROM information_schema.columns " +
@@ -335,10 +288,7 @@ public class DatabaseMetadataService {
         };
     }
 
-//    public List<String> getAllSchemas() {
-//        // PostgreSQL query to fetch all non-system schemas
-//        return tableProperties.getValidSchemaList();
-//    }
+
 public List<String> getAllSchemas() {
     String schemas = env.getProperty("valid.schema.list", "");
     return Arrays.stream(schemas.split(","))
@@ -347,10 +297,106 @@ public List<String> getAllSchemas() {
 }
 
 
-    // ✅ Get all tables for a given schema
+    //  Get all tables for a given schema
+//    public List<String> getTablesBySchema(String schema) {
+//        String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name";
+//        return jdbcTemplate.queryForList(sql, new Object[]{schema}, String.class);
+//    }
+
+
     public List<String> getTablesBySchema(String schema) {
+        // Fetch all tables for given schema
         String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name";
-        return jdbcTemplate.queryForList(sql, new Object[]{schema}, String.class);
+        List<String> allTables = jdbcTemplate.queryForList(sql, new Object[]{schema}, String.class);
+
+        // Check if there's a whitelist defined
+        String allowedList = env.getProperty("allowed.tables." + schema, "").trim();
+        if (!allowedList.isEmpty()) {
+            List<String> allowed = Arrays.stream(allowedList.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+
+            // return only allowed tables
+            return allTables.stream()
+                    .filter(allowed::contains)
+                    .toList();
+        }
+
+        //  Otherwise, check for blacklist
+        String excludeList = env.getProperty("exclude.tables." + schema, "").trim();
+        if (!excludeList.isEmpty()) {
+            List<String> excluded = Arrays.stream(excludeList.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+
+            // return all except excluded
+            return allTables.stream()
+                    .filter(t -> !excluded.contains(t))
+                    .toList();
+        }
+
+        // No filter defined → return all
+        return allTables;
     }
+
+
+        public List<String> getCheckConstraintValues(String tableName, String columnName) {
+            List<String> values = new ArrayList<>();
+
+            try {
+                // Extract schema + table
+                String[] parts = tableName.split("\\.");
+                String schema = parts.length > 1 ? parts[0] : "public";
+                String table = parts.length > 1 ? parts[1] : tableName;
+
+                String sql = """
+            SELECT pg_get_constraintdef(c.oid) AS constraint_def
+            FROM pg_constraint c
+            JOIN pg_class t ON c.conrelid = t.oid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname = ? AND t.relname = ? AND c.contype = 'c'
+        """;
+
+                List<String> defs = jdbcTemplate.queryForList(sql, new Object[]{schema, table}, String.class);
+
+                for (String def : defs) {
+                    if (def == null) continue;
+
+                    if (def.toLowerCase().contains(columnName.toLowerCase())) {
+                        // Handle ARRAY[...] or IN(...)
+                        Pattern pattern = Pattern.compile("ARRAY\\[(.*?)\\]|IN\\s*\\((.*?)\\)", Pattern.CASE_INSENSITIVE);
+                        Matcher matcher = pattern.matcher(def);
+
+                        while (matcher.find()) {
+                            String raw = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+                            if (raw == null) continue;
+
+                            String[] arr = raw.split(",");
+                            for (String item : arr) {
+                                String clean = item
+                                        .replaceAll("::[a-zA-Z_ ]+", "")
+                                        .replace("(", "")
+                                        .replace(")", "")
+                                        .replace("'", "")
+                                        .trim();
+
+                                if (!clean.isEmpty()) values.add(clean);
+                            }
+                        }
+                    }
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+//            System.out.println("✅ Final check values = " + values);
+            return values;
+        }
+
+
+
 
 }
