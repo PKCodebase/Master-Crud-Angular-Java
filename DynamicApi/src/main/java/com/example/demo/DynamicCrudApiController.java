@@ -60,15 +60,12 @@ public class DynamicCrudApiController {
         return ResponseEntity.ok(values);
     }
 
-
-
-
     // List tables per schema
     @GetMapping("/tables")
     public Map<String, List<String>> listTables() throws SQLException {
-    	String schemas = getProperty("valid.schema.list");
-    	List<String> schemaList = new ArrayList<>(Arrays.asList(schemas.split(",")));
-		return metadataService.getAllTables(schemaList);
+        String schemas = getProperty("valid.schema.list");
+        List<String> schemaList = new ArrayList<>(Arrays.asList(schemas.split(",")));
+        return metadataService.getAllTables(schemaList);
     }
 
     // Get all rows
@@ -77,19 +74,18 @@ public class DynamicCrudApiController {
             @PathVariable String schema,
             @PathVariable String table) throws SQLException {
 
-    	Map<String, Object> error = new HashMap<>();
-        if(schema.isBlank() && table.isBlank()) {
-    		error.put("error", "Enter Schema");
+        Map<String, Object> error = new HashMap<>();
+        if (schema.isBlank() && table.isBlank()) {
+            error.put("error", "Enter Schema");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
-		}
+        }
 
-    	if(!getValidSchemaList(schema)) {
-    		error.put("error", "Enter Valid Schema");
+        if (!getValidSchemaList(schema)) {
+            error.put("error", "Enter Valid Schema");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
-    	}
+        }
 
-    	//return jdbcTemplate.queryForList("SELECT * FROM " + schema + "." + table);
-    	List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
+        List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT * FROM " + schema + "." + table);
@@ -116,9 +112,14 @@ public class DynamicCrudApiController {
                                 row.put(colName, LocalDateTime.parse(val.toString()).format(formatter));
                             } catch (Exception e) {
                                 // leave as-is if not parsable
-                            	log.error("Exception--->"+e);
+                                log.error("Exception--->" + e);
                             }
                         }
+                    }
+
+                    // Always return CODE fields in uppercase for UI
+                    if (colName.toLowerCase().contains("code") && row.get(colName) != null) {
+                        row.put(colName, row.get(colName).toString().toUpperCase());
                     }
                 }
             }
@@ -147,7 +148,42 @@ public class DynamicCrudApiController {
         String pk = pkCols.get(0); // support single PK for now
 
         String sql = "SELECT * FROM " + schema + "." + table + " WHERE " + pk + " = ?";
-        return jdbcTemplate.queryForList(sql, id);
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, id);
+
+        // Uppercase code fields and normalize timestamps similar to getAll
+        List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
+        for (Map<String, Object> row : rows) {
+            for (Map<String, Object> col : columns) {
+                String colName = col.get("name").toString();
+                String colType = col.get("type").toString().toLowerCase();
+
+                if (row.containsKey(colName) && row.get(colName) != null) {
+                    Object val = row.get(colName);
+
+                    if (colType.contains("timestamp")) {
+                        if (val instanceof java.sql.Timestamp ts) {
+                            row.put(colName, ts.toLocalDateTime().format(formatter));
+                        } else if (val instanceof java.time.OffsetDateTime odt) {
+                            row.put(colName, odt.toLocalDateTime().format(formatter));
+                        } else {
+                            try {
+                                row.put(colName, LocalDateTime.parse(val.toString()).format(formatter));
+                            } catch (Exception e) {
+                                log.error("Exception--->" + e);
+                            }
+                        }
+                    }
+
+                    if (colName.toLowerCase().contains("code") && row.get(colName) != null) {
+                        row.put(colName, row.get(colName).toString().toUpperCase());
+                    }
+                }
+            }
+        }
+
+        return rows;
     }
 
     // Dynamic Search
@@ -157,7 +193,7 @@ public class DynamicCrudApiController {
             @PathVariable String table,
             @RequestParam MultiValueMap<String, String> filterParams) {
 
-    	StringBuilder sql = new StringBuilder("SELECT * FROM ")
+        StringBuilder sql = new StringBuilder("SELECT * FROM ")
                 .append(schema).append(".").append(table);
 
         List<Object> values = new ArrayList<>();
@@ -193,18 +229,22 @@ public class DynamicCrudApiController {
                         value = rawValue.substring(2);
                     }
 
-                    conditions.add(column + " " + operator + " ?");
-
-                    // type-aware binding
                     int sqlType = columnTypes.getOrDefault(column, java.sql.Types.VARCHAR);
                     Object typedValue;
 
-                    if (sqlType == java.sql.Types.INTEGER || sqlType == java.sql.Types.BIGINT) {
+                    // CASE-INSENSITIVE SEARCH FOR CODE FIELDS
+                    if (column.toLowerCase().contains("code")) {
+                        conditions.add("UPPER(" + column + ") " + operator + " ?");
+                        typedValue = value.toUpperCase();
+                    } else if (sqlType == java.sql.Types.INTEGER || sqlType == java.sql.Types.BIGINT) {
+                        conditions.add(column + " " + operator + " ?");
                         typedValue = Long.parseLong(value);
                     } else if (sqlType == java.sql.Types.DECIMAL || sqlType == java.sql.Types.NUMERIC) {
+                        conditions.add(column + " " + operator + " ?");
                         typedValue = new java.math.BigDecimal(value);
                     } else {
-                        typedValue = value; // fallback string
+                        conditions.add(column + " " + operator + " ?");
+                        typedValue = value;
                     }
 
                     values.add(typedValue);
@@ -218,85 +258,82 @@ public class DynamicCrudApiController {
     }
 
 
+    @PostMapping("/{schema}/{table}")
+    public Map<String, Object> insertRow(
+            @PathVariable String schema,
+            @PathVariable String table,
+            @RequestBody Map<String, Object> rowData,
+            HttpServletRequest request) throws SQLException {
 
-@PostMapping("/{schema}/{table}")
-public Map<String, Object> insertRow(
-        @PathVariable String schema,
-        @PathVariable String table,
-        @RequestBody Map<String, Object> rowData,
-        HttpServletRequest request) throws SQLException {
+        List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
+        List<String> pkColumns = metadataService.getPrimaryKeys(schema, table);
 
-    List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
-    List<String> pkColumns = metadataService.getPrimaryKeys(schema, table);
+        // 1️⃣ Auto system fields
+        String currentUser = "System";
+        LocalDateTime now = LocalDateTime.now();
 
-    // 1️⃣ Auto system fields
-    String currentUser = "System";
-    LocalDateTime now = LocalDateTime.now();
+        Map<String, Object> autoFields = new HashMap<>();
+        autoFields.put("created_by", currentUser);
+        autoFields.put("created_date", now);
+        autoFields.put("created_uri", request.getRequestURL().toString());
+        autoFields.put("modified_uri", request.getRequestURL().toString());
+        autoFields.put("created_ip_addr", IPUtil.getClientIp(request));
+        autoFields.put("api_service_url", request.getRequestURL());
+        autoFields.putIfAbsent("status", "ACTIVE");
 
-    Map<String, Object> autoFields = new HashMap<>();
-    autoFields.put("created_by", currentUser);
-    autoFields.put("created_date", now);
-    autoFields.put("created_uri", request.getRequestURL().toString());
-    autoFields.put("modified_uri", request.getRequestURL().toString());
-    autoFields.put("created_ip_addr", IPUtil.getClientIp(request));
-    autoFields.put("api_service_url", request.getRequestURL());
-    autoFields.putIfAbsent("status", "ACTIVE");
+        Map<String, Object> finalData = new HashMap<>(rowData);
+        finalData.putAll(autoFields);
 
-    Map<String, Object> finalData = new HashMap<>(rowData);
-    finalData.putAll(autoFields);
+        // 2️⃣ Build insertable columns and values
+        List<String> insertableCols = new ArrayList<>();
+        List<Object> values = new ArrayList<>();
 
-    // 2️⃣ Build insertable columns and values
-    List<String> insertableCols = new ArrayList<>();
-    List<Object> values = new ArrayList<>();
+        for (Map<String, Object> col : columns) {
+            String colName = (String) col.get("name");
+            String dataType = (String) col.get("type");
 
-    for (Map<String, Object> col : columns) {
-        String colName = (String) col.get("name");
-        String dataType = (String) col.get("type");
+            // Skip PK if auto-generated
+            if (pkColumns.contains(colName)) continue;
 
-        // Skip PK if auto-generated
-        if (pkColumns.contains(colName)) continue;
-
-        if (finalData.containsKey(colName)) {
-            Object val = finalData.get(colName);
-            if (val != null && !val.toString().trim().isEmpty()) {
-                insertableCols.add(colName);
-                values.add(convertValue(val, dataType));
+            if (finalData.containsKey(colName)) {
+                Object val = finalData.get(colName);
+                if (val != null && !val.toString().trim().isEmpty()) {
+                    insertableCols.add(colName);
+                    values.add(convertValue(val, dataType, colName));
+                }
             }
         }
-    }
 
-    if (insertableCols.isEmpty()) {
-        return Map.of("status", "failed", "message", "No valid columns provided for insert");
-    }
-
-    // 3️⃣ Prepare SQL
-    String colNames = String.join(", ", insertableCols);
-    String placeholders = String.join(", ", Collections.nCopies(insertableCols.size(), "?"));
-    String sql = String.format("INSERT INTO %s.%s (%s) VALUES (%s)", schema, table, colNames, placeholders);
-
-    try {
-        jdbcTemplate.update(sql, values.toArray());
-        return Map.of("status", "success", "message", "Row inserted successfully", "data", finalData);
-    }
-    catch (org.springframework.dao.DataIntegrityViolationException e) {
-        Throwable rootCause = e.getRootCause();
-        if (rootCause != null && rootCause.getMessage() != null && rootCause.getMessage().contains("duplicate key value")) {
-            // Extract constraint name (optional)
-            String detail = "";
-            if (rootCause.getMessage().contains("Detail:")) {
-                detail = rootCause.getMessage().substring(rootCause.getMessage().indexOf("Detail:")).trim();
-            }
-            return Map.of(
-                    "status", "error",
-                    "message", "Duplicate record exists. " + detail
-            );
+        if (insertableCols.isEmpty()) {
+            return Map.of("status", "failed", "message", "No valid columns provided for insert");
         }
-        throw e; // rethrow others
+
+        // 3️⃣ Prepare SQL
+        String colNames = String.join(", ", insertableCols);
+        String placeholders = String.join(", ", Collections.nCopies(insertableCols.size(), "?"));
+        String sql = String.format("INSERT INTO %s.%s (%s) VALUES (%s)", schema, table, colNames, placeholders);
+
+        try {
+            jdbcTemplate.update(sql, values.toArray());
+            return Map.of("status", "success", "message", "Row inserted successfully", "data", finalData);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            Throwable rootCause = e.getRootCause();
+            if (rootCause != null && rootCause.getMessage() != null && rootCause.getMessage().contains("duplicate key value")) {
+                // Extract constraint name (optional)
+                String detail = "";
+                if (rootCause.getMessage().contains("Detail:")) {
+                    detail = rootCause.getMessage().substring(rootCause.getMessage().indexOf("Detail:")).trim();
+                }
+                return Map.of(
+                        "status", "error",
+                        "message", "Duplicate record exists. " + detail
+                );
+            }
+            throw e; // rethrow others
+        } catch (Exception ex) {
+            return Map.of("status", "error", "message", "Insert failed: " + ex.getMessage());
+        }
     }
-    catch (Exception ex) {
-        return Map.of("status", "error", "message", "Insert failed: " + ex.getMessage());
-    }
-}
 
     @PutMapping("/{schema}/{table}/{id}")
     public int updateRow(
@@ -320,13 +357,11 @@ public Map<String, Object> insertRow(
         LocalDateTime now = LocalDateTime.now();
 
         rowData.put("modified_by", currentUser);
-        rowData.put("modified_date",  LocalDateTime.now());
+        rowData.put("modified_date", LocalDateTime.now());
         rowData.put("created_uri", request.getRequestURL().toString());
         rowData.put("modified_uri", request.getRequestURL().toString());
-        rowData.put("modified_ip_addr",  IPUtil.getClientIp(request));
-        rowData.put("api_service_url",request.getRequestURL());
-
-
+        rowData.put("modified_ip_addr", IPUtil.getClientIp(request));
+        rowData.put("api_service_url", request.getRequestURL());
 
         // 2️⃣ Build SET clause
         List<String> updatableCols = new ArrayList<>();
@@ -344,7 +379,7 @@ public Map<String, Object> insertRow(
                 Object val = rowData.get(colName);
                 if (val != null && !val.toString().trim().isEmpty()) {
                     updatableCols.add(colName + " = ?");
-                    values.add(convertValue(val, dataType));
+                    values.add(convertValue(val, dataType, colName));
                 }
             }
         }
@@ -353,16 +388,14 @@ public Map<String, Object> insertRow(
             throw new RuntimeException("No updatable columns provided for " + schema + "." + table);
         }
 
-        // 3️⃣ Add PK value at end
-        values.add(convertValue(id, getColumnType(columns, pk)));
+        // 3️⃣ Add PK value at end (convert using column type for pk)
+        values.add(convertValue(id, getColumnType(columns, pk), pk));
 
         String setClause = String.join(", ", updatableCols);
         String sql = "UPDATE " + schema + "." + table + " SET " + setClause + " WHERE " + pk + " = ?";
 
         return jdbcTemplate.update(sql, values.toArray());
     }
-
-
 
     private String getColumnType(List<Map<String, Object>> columns, String columnName) {
         return columns.stream()
@@ -372,9 +405,15 @@ public Map<String, Object> insertRow(
                 .orElse("text");
     }
 
-    private Object convertValue(Object value, String dataType) {
+    private Object convertValue(Object value, String dataType, String columnName) {
         if (value == null) return null;
+
         String str = value.toString().trim();
+
+        // ⭐ Auto UPPERCASE for any "code" field
+        if (columnName != null && columnName.toLowerCase().contains("code")) {
+            str = str.toUpperCase();
+        }
 
         switch (dataType.toLowerCase()) {
             case "bigserial":
@@ -415,7 +454,6 @@ public Map<String, Object> insertRow(
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to convert value to JSONB: " + str, e);
                 }
-
 
             case "timestamp":
             case "timestamptz":
@@ -464,100 +502,92 @@ public Map<String, Object> insertRow(
         return jdbcTemplate.update(sql, id);
     }
 
+    @GetMapping("/{schema}/{table}/fk-values/{column}")
+    public List<Map<String, Object>> getForeignKeyValues(
+            @PathVariable String schema,
+            @PathVariable String table,
+            @PathVariable String column) throws SQLException {
 
+        List<Map<String, Object>> fks = metadataService.getForeignKeys(schema, table);
+        Map<String, Object> fkInfo = fks.stream()
+                .filter(fk -> fk.get("fkColumn").equals(column))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No FK found for column " + column));
 
-@GetMapping("/{schema}/{table}/fk-values/{column}")
-public List<Map<String, Object>> getForeignKeyValues(
-        @PathVariable String schema,
-        @PathVariable String table,
-        @PathVariable String column) throws SQLException {
+        String pkTable = (String) fkInfo.get("pkTable");
+        String pkTableSchema = (String) fkInfo.get("pkTableSchema");
+        String pkColumn = (String) fkInfo.get("pkColumn");
+        String displayColumn = (String) fkInfo.get("displayColumn");
 
-    List<Map<String, Object>> fks = metadataService.getForeignKeys(schema, table);
-    Map<String, Object> fkInfo = fks.stream()
-            .filter(fk -> fk.get("fkColumn").equals(column))
-            .findFirst()
-            .orElseThrow(() -> new RuntimeException("No FK found for column " + column));
+        if (displayColumn.equalsIgnoreCase("NONE")) {
+            displayColumn = pkColumn; // fallback
+        }
 
-    String pkTable = (String) fkInfo.get("pkTable");
-    String pkTableSchema = (String) fkInfo.get("pkTableSchema");
-    String pkColumn = (String) fkInfo.get("pkColumn");
-    String displayColumn = (String) fkInfo.get("displayColumn");
+        String sql = "SELECT " + pkColumn + " as id, " + displayColumn + " as value FROM "
+                + pkTableSchema + "." + pkTable;
 
-    if (displayColumn.equalsIgnoreCase("NONE")) {
-        displayColumn = pkColumn; // fallback
+        return jdbcTemplate.queryForList(sql);
     }
 
-    String sql = "SELECT " + pkColumn + " as id, " + displayColumn + " as value FROM "
-            + pkTableSchema + "." + pkTable;
-
-    return jdbcTemplate.queryForList(sql);
-}
-
-
-
     public String getDropdownColumnsForForeignKeys(String schema, String table) {
-    	try {
-    		if(schema.isBlank() && table.isBlank()) {
-    			return "";
-    		}
-    		if(getValidSchemaList(schema)) {
-    			String tableName = schema+"."+table;
-    			String key = getProperty(tableName+".key");
-    			String val = getProperty(tableName+".val");
+        try {
+            if (schema.isBlank() && table.isBlank()) {
+                return "";
+            }
+            if (getValidSchemaList(schema)) {
+                String tableName = schema + "." + table;
+                String key = getProperty(tableName + ".key");
+                String val = getProperty(tableName + ".val");
 
-    			if(!key.isBlank() && !val.isBlank()) {
-    				return key + " as id, "+val+" as value ";
-    			}else {
-    				//System.err.println("Key and Value unavailable for table ---"+tableName);
-    				log.error("Key and Value unavailable for table ---"+tableName);
-    			}
-    		}else {
-    			log.error("Invalid Schema -- "+schema);
-    		}
-    	}catch (Exception e) {
-			//e.printStackTrace();
-			log.error("Exception--->"+e);
-		}
-    	return "";
+                if (!key.isBlank() && !val.isBlank()) {
+                    return key + " as id, " + val + " as value ";
+                } else {
+                    log.error("Key and Value unavailable for table ---" + tableName);
+                }
+            } else {
+                log.error("Invalid Schema -- " + schema);
+            }
+        } catch (Exception e) {
+            log.error("Exception--->" + e);
+        }
+        return "";
     }
 
     public boolean getValidSchemaList(String schema) {
-    	try {
-    		if(!schema.isBlank()) {
-    			String schemas = getProperty("valid.schema.list");
-    			List<String> schemaList = new ArrayList<>(Arrays.asList(schemas.split(",")));
-    			if(schemaList.contains(schema)) {
-    				return true;
-    			}
-    		}else {
-    			return false;
-    		}
-    	}catch (Exception e) {
-    		//e.printStackTrace();
-    		log.error("Exception--->"+e);
-		}
-    	return false;
+        try {
+            if (!schema.isBlank()) {
+                String schemas = getProperty("valid.schema.list");
+                List<String> schemaList = new ArrayList<>(Arrays.asList(schemas.split(",")));
+                if (schemaList.contains(schema)) {
+                    return true;
+                }
+            } else {
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("Exception--->" + e);
+        }
+        return false;
     }
 
     public String getProperty(String val) {
-    	String propValue = "";
-    	try {
-    		Properties props = new Properties();
-			props.load(new ClassPathResource("tables-dropdown.properties").getInputStream());
-			propValue = props.getProperty(val);
-			if(!propValue.isBlank()) {
-				return propValue;
-			}
-    	}catch (Exception e) {
-    		//e.printStackTrace();
-    		log.error("Exception--->"+e);
-		}
-    	return propValue;
+        String propValue = "";
+        try {
+            Properties props = new Properties();
+            props.load(new ClassPathResource("tables-dropdown.properties").getInputStream());
+            propValue = props.getProperty(val);
+            if (!propValue.isBlank()) {
+                return propValue;
+            }
+        } catch (Exception e) {
+            log.error("Exception--->" + e);
+        }
+        return propValue;
     }
 
     @GetMapping("/{schema}/{table}/constraints")
     public List<Map<String, Object>> getConstraints(@PathVariable String schema, @PathVariable String table) {
-        String sql = """ 
+        String sql = """
             SELECT conname, pg_get_constraintdef(c.oid) as definition
             FROM pg_constraint c
             JOIN pg_class t ON c.conrelid = t.oid
@@ -578,8 +608,5 @@ public List<Map<String, Object>> getForeignKeyValues(
     public ResponseEntity<List<String>> getTables(@PathVariable String schema) {
         return ResponseEntity.ok(metadataService.getTablesBySchema(schema));
     }
-
-
-
 
 }
