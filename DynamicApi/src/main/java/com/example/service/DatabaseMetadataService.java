@@ -10,6 +10,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 
+import com.example.demo.DynamicCrudApiController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
@@ -26,6 +29,8 @@ public class DatabaseMetadataService {
 
     @Autowired
     private Environment env;
+
+    private static final Logger log = LoggerFactory.getLogger(DatabaseMetadataService.class);
 
 
 
@@ -68,35 +73,131 @@ public class DatabaseMetadataService {
     /**
      * Get columns for a given schema and table
      */
+//    public List<Map<String, Object>> getColumns(String schema, String table) throws SQLException {
+//        long startTime = System.currentTimeMillis();
+//        log.info("Fetching columns for {}.{}", schema, table);
+//
+//        List<Map<String, Object>> columns = new ArrayList<>();
+//
+//        // Validate inputs
+//        if (schema == null || schema.isBlank() || table == null || table.isBlank()) {
+//            log.warn("Schema or Table name is blank. Schema='{}', Table='{}'", schema, table);
+//            return Collections.emptyList();
+//        }
+//
+//        try (Connection conn = Objects.requireNonNull(jdbcTemplate.getDataSource()).getConnection()) {
+//
+//            DatabaseMetaData metaData = conn.getMetaData();
+//
+//            // ▶ Fetch Primary Keys
+//            Set<String> pkColumns = new HashSet<>();
+//            try (ResultSet pkRs = metaData.getPrimaryKeys(null, schema, table)) {
+//                while (pkRs.next()) {
+//                    String pkCol = pkRs.getString("COLUMN_NAME");
+//                    pkColumns.add(pkCol);
+//                }
+//                log.debug("Primary keys for {}.{} : {}", schema, table, pkColumns);
+//            }
+//
+//            // ▶ Fetch Foreign Keys
+//            Set<String> fkColumns = new HashSet<>();
+//            try (ResultSet fkRs = metaData.getImportedKeys(conn.getCatalog(), schema, table)) {
+//                while (fkRs.next()) {
+//                    fkColumns.add(fkRs.getString("FKCOLUMN_NAME"));
+//                }
+//                log.debug("Foreign keys for {}.{} : {}", schema, table, fkColumns);
+//            }
+//
+//            // ▶ Fetch Columns metadata
+//            try (ResultSet rs = metaData.getColumns(null, schema, table, "%")) {
+//                while (rs.next()) {
+//                    Map<String, Object> col = new HashMap<>();
+//
+//                    String colName = rs.getString("COLUMN_NAME");
+//                    String rawType = rs.getString("TYPE_NAME").toLowerCase();
+//
+//                    // Normalize Postgres types
+//                    String normalizedType = switch (rawType) {
+//                        case "int2"     -> "smallint";
+//                        case "int4"     -> "integer";
+//                        case "int8"     -> "bigint";
+//                        case "serial"   -> "serial";
+//                        case "bigserial"-> "bigserial";
+//                        case "json", "jsonb" -> "json";
+//                        case "varchar"  -> "varchar";
+//                        case "bpchar"   -> "char";
+//                        case "timestamptz" -> "timestamp with time zone";
+//                        case "timestamp"   -> "timestamp";
+//                        default -> rawType;
+//                    };
+//
+//                    col.put("name", colName);
+//                    col.put("type", normalizedType);
+//                    col.put("size", rs.getInt("COLUMN_SIZE"));
+//                    col.put("nullable", "YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")));
+//                    col.put("autoIncrement", "YES".equalsIgnoreCase(rs.getString("IS_AUTOINCREMENT")));
+//                    col.put("primaryKey", pkColumns.contains(colName));
+//                    col.put("isForeignKey", fkColumns.contains(colName));
+//
+//                    columns.add(col);
+//                }
+//            }
+//
+//            log.info("Successfully fetched {} columns for {}.{}", columns.size(), schema, table);
+//        }
+//        catch (Exception ex) {
+//            log.error("Error fetching columns for {}.{} : {}", schema, table, ex.getMessage(), ex);
+//            throw ex;
+//        }
+//        finally {
+//            long duration = System.currentTimeMillis() - startTime;
+//            log.info("Completed column fetch for {}.{} in {} ms", schema, table, duration);
+//        }
+//
+//        return columns;
+//    }
+
     public List<Map<String, Object>> getColumns(String schema, String table) throws SQLException {
-    	List<Map<String, Object>> columns = new ArrayList<>();
+
+        long start = System.currentTimeMillis();
+        log.info("Fetching column metadata for {}.{}", schema, table);
+
+        if (schema == null || schema.isBlank() || table == null || table.isBlank()) {
+            log.warn("Invalid input: schema='{}' table='{}'", schema, table);
+            return Collections.emptyList();
+        }
+
+        List<Map<String, Object>> columns = new ArrayList<>();
 
         try (Connection conn = Objects.requireNonNull(jdbcTemplate.getDataSource()).getConnection()) {
-            DatabaseMetaData metaData = conn.getMetaData();
 
-            // Get primary key columns
-            Set<String> pkColumns = new HashSet<>();
-            try (ResultSet pkRs = metaData.getPrimaryKeys(null, schema, table)) {
-                while (pkRs.next()) {
-                    pkColumns.add(pkRs.getString("COLUMN_NAME"));
+            DatabaseMetaData meta = conn.getMetaData();
+
+            // --- Fetch PK ---
+            Set<String> pkCols = new HashSet<>();
+            try (ResultSet rs = meta.getPrimaryKeys(null, schema, table)) {
+                while (rs.next()) {
+                    pkCols.add(rs.getString("COLUMN_NAME"));
                 }
             }
+            log.debug("PK columns for {}.{} => {}", schema, table, pkCols);
 
-            // Collect FK columns for this table
-            Set<String> fkColumns = new HashSet<>();
-            ResultSet fkRs = metaData.getImportedKeys(conn.getCatalog(), schema, table);
-            while (fkRs.next()) {
-                fkColumns.add(fkRs.getString("FKCOLUMN_NAME"));
-            }
-
-            // 🔹 Get auto-increment columns (from ResultSet "IS_AUTOINCREMENT")
-            try (ResultSet rs = metaData.getColumns(null, schema, table, "%")) {
+            // --- Fetch FK ---
+            Set<String> fkCols = new HashSet<>();
+            try (ResultSet rs = meta.getImportedKeys(conn.getCatalog(), schema, table)) {
                 while (rs.next()) {
-                    Map<String, Object> col = new HashMap<>();
+                    fkCols.add(rs.getString("FKCOLUMN_NAME"));
+                }
+            }
+            log.debug("FK columns for {}.{} => {}", schema, table, fkCols);
+
+            // --- Fetch Column Metadata ---
+            try (ResultSet rs = meta.getColumns(null, schema, table, "%")) {
+                while (rs.next()) {
+
                     String colName = rs.getString("COLUMN_NAME");
-                    //String type = rs.getString("TYPE_NAME");
                     String rawType = rs.getString("TYPE_NAME").toLowerCase();
-                 // 🔄 Normalize Postgres internal types
+
                     String normalizedType = switch (rawType) {
                         case "int2"     -> "smallint";
                         case "int4"     -> "integer";
@@ -107,45 +208,78 @@ public class DatabaseMetadataService {
                         case "varchar"  -> "varchar";
                         case "bpchar"   -> "char";
                         case "timestamptz" -> "timestamp with time zone";
-                        case "timestamp"   -> "timestamp";
-                        default -> rawType; // fallback
+                        case "timestamp" -> "timestamp";
+                        default -> rawType;
                     };
 
-                    int size = rs.getInt("COLUMN_SIZE");
-                    String isNullable = rs.getString("IS_NULLABLE");
-                    String isAutoInc = rs.getString("IS_AUTOINCREMENT");
-
+                    Map<String, Object> col = new HashMap<>();
                     col.put("name", colName);
-                    //col.put("type", type);
                     col.put("type", normalizedType);
-                    col.put("size", size);
-                    col.put("nullable", "YES".equalsIgnoreCase(isNullable));
-                    col.put("autoIncrement", "YES".equalsIgnoreCase(isAutoInc));
-                    col.put("primaryKey", pkColumns.contains(colName));
-                    col.put("isForeignKey", fkColumns.contains(colName));
+                    col.put("size", rs.getInt("COLUMN_SIZE"));
+                    col.put("nullable", "YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")));
+                    col.put("autoIncrement", "YES".equalsIgnoreCase(rs.getString("IS_AUTOINCREMENT")));
+                    col.put("primaryKey", pkCols.contains(colName));
+                    col.put("isForeignKey", fkCols.contains(colName));
 
                     columns.add(col);
                 }
             }
+
+            log.info("Fetched {} columns for {}.{}", columns.size(), schema, table);
+
+        } catch (Exception ex) {
+            log.error("Error reading columns for {}.{} : {}", schema, table, ex.getMessage(), ex);
+            throw ex;
+        } finally {
+            log.info("getColumns({}.{}) completed in {} ms",
+                    schema, table, (System.currentTimeMillis() - start));
         }
+
         return columns;
     }
+
 
     /**
      * Get primary key column(s) for a given table
      */
+//    public List<String> getPrimaryKeys(String schema, String table) throws SQLException {
+//        List<String> pkCols = new ArrayList<>();
+//        try (Connection conn = Objects.requireNonNull(jdbcTemplate.getDataSource()).getConnection()) {
+//            DatabaseMetaData metaData = conn.getMetaData();
+//            ResultSet rs = metaData.getPrimaryKeys(null, schema, table);
+//
+//            while (rs.next()) {
+//                pkCols.add(rs.getString("COLUMN_NAME"));
+//            }
+//        }
+//        return pkCols;
+//    }
+
     public List<String> getPrimaryKeys(String schema, String table) throws SQLException {
+
+        log.debug("Fetching primary keys for {}.{}", schema, table);
+
         List<String> pkCols = new ArrayList<>();
+
         try (Connection conn = Objects.requireNonNull(jdbcTemplate.getDataSource()).getConnection()) {
-            DatabaseMetaData metaData = conn.getMetaData();
-            ResultSet rs = metaData.getPrimaryKeys(null, schema, table);
+
+            DatabaseMetaData meta = conn.getMetaData();
+            ResultSet rs = meta.getPrimaryKeys(null, schema, table);
 
             while (rs.next()) {
                 pkCols.add(rs.getString("COLUMN_NAME"));
             }
+
+            log.info("Found {} PK columns for {}.{} -> {}", pkCols.size(), schema, table, pkCols);
+
+        } catch (Exception ex) {
+            log.error("Failed to fetch PK for {}.{} : {}", schema, table, ex.getMessage(), ex);
+            throw ex;
         }
+
         return pkCols;
     }
+
 
     //Exact
 
@@ -224,6 +358,8 @@ public class DatabaseMetadataService {
         }
     }
 
+
+
     public Map<String, Integer> getColumnTypes(String schema, String table) {
         String sql = """
             SELECT column_name, data_type
@@ -288,13 +424,44 @@ public class DatabaseMetadataService {
         };
     }
 
+//
+//public List<String> getAllSchemas() {
+//
+//    log.info("Fetching all schemas");
+//
+//    String schemas = env.getProperty("valid.schema.list", "");
+//    return Arrays.stream(schemas.split(","))
+//            .map(String::trim)
+//            .collect(Collectors.toList());
+//}
 
-public List<String> getAllSchemas() {
-    String schemas = env.getProperty("valid.schema.list", "");
-    return Arrays.stream(schemas.split(","))
-            .map(String::trim)
-            .collect(Collectors.toList());
-}
+    public List<String> getAllSchemas() {
+        log.info("Fetching all schemas from configuration");
+
+        try {
+            String schemas = env.getProperty("valid.schema.list");
+
+            if (schemas == null || schemas.isBlank()) {
+                log.warn("No schemas found in property: valid.schema.list");
+                return Collections.emptyList();
+            }
+
+            List<String> schemaList = Arrays.stream(schemas.split(","))
+                    .map(String::trim)
+                    .filter(fetchedSchemas -> !fetchedSchemas.isEmpty())
+                    .distinct()
+                    .collect(Collectors.toUnmodifiableList()); // 🔥 immutable list (safer)
+
+            log.info("Schemas fetched successfully: {}", schemaList);
+
+            return schemaList;
+        }
+        catch (Exception ex) {
+            log.error("Error occurred while fetching schemas: {}", ex.getMessage(), ex);
+            return Collections.emptyList();
+        }
+    }
+
 
 
     //  Get all tables for a given schema
@@ -305,12 +472,20 @@ public List<String> getAllSchemas() {
 
 
     public List<String> getTablesBySchema(String schema) {
+
+        log.info("Fetching tables for schema: " + schema);
+
         // Fetch all tables for given schema
         String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name";
         List<String> allTables = jdbcTemplate.queryForList(sql, new Object[]{schema}, String.class);
 
         // Check if there's a whitelist defined
+        log.info("All tables before filtering: " + allTables);
+
         String allowedList = env.getProperty("allowed.tables." + schema, "").trim();
+
+        log.info("Allowed tables: " + allowedList);
+
         if (!allowedList.isEmpty()) {
             List<String> allowed = Arrays.stream(allowedList.split(","))
                     .map(String::trim)

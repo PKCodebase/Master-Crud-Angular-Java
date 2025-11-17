@@ -626,29 +626,62 @@ loadMetadata(schema: any, table: any): void {
       });
 
       if (this.isEdit && this.rowId) {
-        this.formService.update(this.selectedSchema, this.selectedTable, this.rowId, formData).subscribe({
-          next: (res) => {
-            alert('Row updated successfully!');
-            this.isEdit = false;
-            this.rowId = null;
-            this.loadData(this.selectedSchema, this.selectedTable);
-            this.form.reset();
-          },
-          error: (err) => {
-            alert('Update failed: ' + err.message);
-          }
-        });
-      } else {
-        this.formService.insertRow(this.selectedSchema, this.selectedTable, formData).subscribe({
-          next: (res) => {
-            alert('Row inserted successfully!');
-            this.loadData(this.selectedSchema, this.selectedTable);
-            this.form.reset();
-          },
-          error: (err) => {
-            alert('Insert failed: ' + err.message);
-          }
-        });
+
+  this.formService.update(this.selectedSchema, this.selectedTable, this.rowId, formData)
+    .subscribe({
+
+      next: (res: any) => {
+
+        // 🔥 Handle backend JSON error structure (status: "error")
+        if (res?.status === 'error') {
+          alert(res.message);      // shows: colony_code already exists: C223
+          return;
+        }
+
+        // 🔥 SUCCESS
+        alert('Row updated successfully!');
+        this.isEdit = false;
+        this.rowId = null;
+        this.loadData(this.selectedSchema, this.selectedTable);
+        this.form.reset();
+      },
+
+      error: (err: any) => {
+        // 🔥 Handle thrown exceptions from backend (RuntimeException)
+        const msg =
+          err?.error?.message ||
+          err?.message ||
+          'Update failed due to server error.';
+
+        alert(msg);
+      }
+
+    });
+
+}
+ else {
+        this.formService.insertRow(this.selectedSchema, this.selectedTable, formData)
+  .subscribe({
+    next: (res: any) => {
+
+      // 🔥 BACKEND ERROR HANDLING
+      if (res?.status === 'error') {
+        alert(res.message);     // Show backend message: "colony_code already exists: C223"
+        return;
+      }
+
+      // 🔥 SUCCESS HANDLING
+      alert('Row inserted successfully!');
+      this.loadData(this.selectedSchema, this.selectedTable);
+      this.form.reset();
+    },
+
+    error: err => {
+      // 🔥 HARD FAILURE FROM SERVER (e.g. 500)
+      alert('Insert failed: ' + (err?.error?.message || err.message));
+    }
+  });
+
       }
     }
   }

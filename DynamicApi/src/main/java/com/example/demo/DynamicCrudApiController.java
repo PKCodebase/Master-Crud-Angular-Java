@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import com.example.security.IPUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,6 +31,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.service.DatabaseMetadataService;
+
+import javax.sql.rowset.RowSetWarning;
 
 @CrossOrigin
 @RestController
@@ -74,58 +77,84 @@ public class DynamicCrudApiController {
             @PathVariable String schema,
             @PathVariable String table) throws SQLException {
 
-        Map<String, Object> error = new HashMap<>();
-        if (schema.isBlank() && table.isBlank()) {
-            error.put("error", "Enter Schema");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        long start = System.currentTimeMillis();
+        log.info("Fetching all records from {}.{}", schema, table);
+
+        // ---------------------------- VALIDATION ----------------------------
+        if (schema == null || schema.isBlank() || table == null || table.isBlank()) {
+            log.warn("Invalid request: schema='{}', table='{}'", schema, table);
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Schema or table name cannot be blank"));
         }
 
         if (!getValidSchemaList(schema)) {
-            error.put("error", "Enter Valid Schema");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            log.warn("Schema '{}' is not allowed", schema);
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Enter valid schema"));
         }
 
-        List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
+        try {
+            // ------------------------- GET COLUMNS -------------------------
+            List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
+            log.debug("Column metadata loaded for {}.{}", schema, table);
 
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT * FROM " + schema + "." + table);
+            // ------------------------- FETCH DATA --------------------------
+            String sql = String.format("SELECT * FROM %s.%s", schema, table);
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+            // ------------------------- PROCESS ROWS ------------------------
+            for (Map<String, Object> row : rows) {
+                for (Map<String, Object> col : columns) {
 
-        for (Map<String, Object> row : rows) {
-            for (Map<String, Object> col : columns) {
-                String colName = col.get("name").toString();
-                String colType = col.get("type").toString().toLowerCase();
+                    String colName = col.get("name").toString();
+                    String colType = col.get("type").toString().toLowerCase();
 
-                if (row.containsKey(colName) && row.get(colName) != null) {
-                    Object val = row.get(colName);
+                    Object value = row.get(colName);
+                    if (value == null) continue;
 
+                    // Normalize timestamp columns
                     if (colType.contains("timestamp")) {
-                        // Normalize to yyyy-MM-ddTHH:mm:ss
-                        if (val instanceof java.sql.Timestamp ts) {
-                            row.put(colName, ts.toLocalDateTime().format(formatter));
-                        } else if (val instanceof java.time.OffsetDateTime odt) {
-                            row.put(colName, odt.toLocalDateTime().format(formatter));
-                        } else {
-                            // fallback try parsing string
-                            try {
-                                row.put(colName, LocalDateTime.parse(val.toString()).format(formatter));
-                            } catch (Exception e) {
-                                // leave as-is if not parsable
-                                log.error("Exception--->" + e);
+                        try {
+                            if (value instanceof Timestamp ts) {
+                                row.put(colName, ts.toLocalDateTime().format(formatter));
+                            } else if (value instanceof java.time.OffsetDateTime odt) {
+                                row.put(colName, odt.toLocalDateTime().format(formatter));
+                            } else {
+                                row.put(colName, LocalDateTime.parse(value.toString()).format(formatter));
                             }
+                        } catch (Exception e) {
+                            log.error("Failed to normalize timestamp for {}.{}: value='{}', error={}",
+                                    schema, table, value, e.getMessage());
                         }
                     }
 
-                    // Always return CODE fields in uppercase for UI
-                    if (colName.toLowerCase().contains("code") && row.get(colName) != null) {
-                        row.put(colName, row.get(colName).toString().toUpperCase());
+                    // Uppercase any CODE columns
+                    if (colName.toLowerCase().contains("code")) {
+                        try {
+                            row.put(colName, value.toString().toUpperCase());
+                        } catch (Exception e) {
+                            log.warn("Failed to uppercase code column '{}' in {}.{}", colName, schema, table);
+                        }
                     }
                 }
             }
+
+            long duration = System.currentTimeMillis() - start;
+            log.info("Fetched {} rows from {}.{} in {} ms", rows.size(), schema, table, duration);
+
+            return ResponseEntity.ok(rows);
         }
-        return ResponseEntity.ok(rows);
+        catch (Exception ex) {
+            log.error("Error fetching data from {}.{}: {}", schema, table, ex.getMessage(), ex);
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fetch data", "details", ex.getMessage()));
+        }
     }
+
 
     @GetMapping("/{schema}/{table}/columns")
     public List<Map<String, Object>> getTableColumns(
@@ -258,144 +287,324 @@ public class DynamicCrudApiController {
     }
 
 
+//    @PostMapping("/{schema}/{table}")
+//    public Map<String, Object> insertRow(
+//            @PathVariable String schema,
+//            @PathVariable String table,
+//            @RequestBody Map<String, Object> rowData,
+//            HttpServletRequest request) throws SQLException {
+//
+//
+//
+//        long start = System.currentTimeMillis();
+//        log.info("Insert request for {}.{} | Payload={}", schema, table, rowData);
+//
+//        List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
+//        List<String> pkColumns = metadataService.getPrimaryKeys(schema, table);
+//
+//        // --- UNIQUE CODE VALIDATION ---
+//        for (Map<String, Object> col : columns) {
+//            String colName = col.get("name").toString();
+//
+//            if (colName.toLowerCase().contains("code") && rowData.containsKey(colName)) {
+//
+//                String value = rowData.get(colName).toString().toUpperCase();
+//
+//                if (isDuplicateCode(schema, table, colName, value)) {
+//                    log.warn("Duplicate {} found: {}", colName, value);
+//                    return Map.of("status", "error", "message", colName + " already exists: " + value);
+//                }
+//            }
+//        }
+//
+//        // System fields
+//        rowData.put("created_by", "System");
+//        rowData.put("created_date", LocalDateTime.now());
+//        rowData.put("created_ip_addr", IPUtil.getClientIp(request));
+//        rowData.putIfAbsent("status", "ACTIVE");
+//
+//        Map<String, Object> finalData = new HashMap<>(rowData);
+//
+//        List<String> insertCols = new ArrayList<>();
+//        List<Object> values = new ArrayList<>();
+//
+//        for (Map<String, Object> col : columns) {
+//            String colName = col.get("name").toString();
+//            String type = col.get("type").toString();
+//
+//            if (pkColumns.contains(colName)) continue;
+//
+//            if (finalData.containsKey(colName)) {
+//                Object val = finalData.get(colName);
+//                if (val != null && !val.toString().trim().isEmpty()) {
+//                    insertCols.add(colName);
+//                    values.add(convertValue(val, type, colName));
+//                }
+//            }
+//        }
+//
+//        if (insertCols.isEmpty()) {
+//            return Map.of("status", "failed", "message", "No valid columns found");
+//        }
+//
+//        String sql = "INSERT INTO " + schema + "." + table +
+//                " (" + String.join(", ", insertCols) + ") VALUES (" +
+//                String.join(", ", Collections.nCopies(insertCols.size(), "?")) + ")";
+//
+//        try {
+//            jdbcTemplate.update(sql, values.toArray());
+//            log.info("Insert success for {}.{} ({} ms)", schema, table,
+//                    (System.currentTimeMillis() - start));
+//
+//            return Map.of("status", "success", "message", "Inserted", "data", finalData);
+//
+//        } catch (Exception ex) {
+//            log.error("Insert failed for {}.{} : {}", schema, table, ex.getMessage(), ex);
+//            return Map.of("status", "error", "message", ex.getMessage());
+//        }
+//
+//
+//    }
+
     @PostMapping("/{schema}/{table}")
-    public Map<String, Object> insertRow(
+    public ResponseEntity<?> insertRow(
             @PathVariable String schema,
             @PathVariable String table,
             @RequestBody Map<String, Object> rowData,
             HttpServletRequest request) throws SQLException {
 
+        long start = System.currentTimeMillis();
+        log.info("Insert request received for {}.{} | Payload={}", schema, table, rowData);
+
         List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
         List<String> pkColumns = metadataService.getPrimaryKeys(schema, table);
 
-        // 1️⃣ Auto system fields
-        String currentUser = "System";
-        LocalDateTime now = LocalDateTime.now();
+        // ---- UNIQUE CODE VALIDATION ----
+        for (Map<String, Object> col : columns) {
+            String colName = col.get("name").toString();
 
-        Map<String, Object> autoFields = new HashMap<>();
-        autoFields.put("created_by", currentUser);
-        autoFields.put("created_date", now);
-        autoFields.put("created_uri", request.getRequestURL().toString());
-        autoFields.put("modified_uri", request.getRequestURL().toString());
-        autoFields.put("created_ip_addr", IPUtil.getClientIp(request));
-        autoFields.put("api_service_url", request.getRequestURL());
-        autoFields.putIfAbsent("status", "ACTIVE");
+            if (colName.toLowerCase().contains("code") && rowData.containsKey(colName)) {
+                String value = rowData.get(colName).toString().toUpperCase();
+
+                if (isDuplicateCode(schema, table, colName, value)) {
+                    log.warn("Duplicate {} found for insert: {}", colName, value);
+                    return ResponseEntity
+                            .status(HttpStatus.CONFLICT)
+                            .body(Map.of(
+                                    "status", "error",
+                                    "timestamp", LocalDateTime.now().toString(),
+                                    "uri", request.getRequestURI(),
+                                    "message", colName + " already exists: " + value
+                            ));
+                }
+            }
+        }
+
+        // ---- SYSTEM FIELDS ----
+        rowData.put("created_by", "System");
+        rowData.put("created_date", LocalDateTime.now());
+        rowData.put("created_ip_addr", IPUtil.getClientIp(request));
+        rowData.putIfAbsent("status", "ACTIVE");
 
         Map<String, Object> finalData = new HashMap<>(rowData);
-        finalData.putAll(autoFields);
 
-        // 2️⃣ Build insertable columns and values
-        List<String> insertableCols = new ArrayList<>();
+        List<String> insertCols = new ArrayList<>();
         List<Object> values = new ArrayList<>();
 
         for (Map<String, Object> col : columns) {
-            String colName = (String) col.get("name");
-            String dataType = (String) col.get("type");
+            String colName = col.get("name").toString();
+            String type = col.get("type").toString();
 
-            // Skip PK if auto-generated
             if (pkColumns.contains(colName)) continue;
 
             if (finalData.containsKey(colName)) {
                 Object val = finalData.get(colName);
                 if (val != null && !val.toString().trim().isEmpty()) {
-                    insertableCols.add(colName);
-                    values.add(convertValue(val, dataType, colName));
+                    insertCols.add(colName);
+                    values.add(convertValue(val, type, colName));
                 }
             }
         }
 
-        if (insertableCols.isEmpty()) {
-            return Map.of("status", "failed", "message", "No valid columns provided for insert");
+        if (insertCols.isEmpty()) {
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("status", "failed", "message", "No valid columns found"));
         }
 
-        // 3️⃣ Prepare SQL
-        String colNames = String.join(", ", insertableCols);
-        String placeholders = String.join(", ", Collections.nCopies(insertableCols.size(), "?"));
-        String sql = String.format("INSERT INTO %s.%s (%s) VALUES (%s)", schema, table, colNames, placeholders);
+        String sql = "INSERT INTO " + schema + "." + table +
+                " (" + String.join(", ", insertCols) + ") VALUES (" +
+                String.join(", ", Collections.nCopies(insertCols.size(), "?")) + ")";
 
         try {
             jdbcTemplate.update(sql, values.toArray());
-            return Map.of("status", "success", "message", "Row inserted successfully", "data", finalData);
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            Throwable rootCause = e.getRootCause();
-            if (rootCause != null && rootCause.getMessage() != null && rootCause.getMessage().contains("duplicate key value")) {
-                // Extract constraint name (optional)
-                String detail = "";
-                if (rootCause.getMessage().contains("Detail:")) {
-                    detail = rootCause.getMessage().substring(rootCause.getMessage().indexOf("Detail:")).trim();
-                }
-                return Map.of(
-                        "status", "error",
-                        "message", "Duplicate record exists. " + detail
-                );
-            }
-            throw e; // rethrow others
+            log.info("Insert success for {}.{} | {} ms", schema, table, (System.currentTimeMillis() - start));
+
+            return ResponseEntity.ok(Map.of(
+                    "status", "success",
+                    "message", "Raw inserted successfully"
+            ));
+
         } catch (Exception ex) {
-            return Map.of("status", "error", "message", "Insert failed: " + ex.getMessage());
+            log.error("Insert failed {}.{} : {}", schema, table, ex.getMessage(), ex);
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "status", "error",
+                            "timestamp", LocalDateTime.now().toString(),
+                            "uri", request.getRequestURI(),
+                            "message", "Insert failed: " + ex.getMessage()
+                    ));
         }
     }
 
+
+
+    private boolean isDuplicateCode(String schema, String table, String colName, String value) {
+
+        String sql = "SELECT EXISTS (" +
+                "SELECT 1 FROM " + schema + "." + table +
+                " WHERE UPPER(" + colName + ") = ?" +
+                ")";
+
+        boolean exists = Boolean.TRUE.equals(
+                jdbcTemplate.queryForObject(sql, Boolean.class, value.toUpperCase())
+        );
+
+        log.debug("Duplicate check for {}.{} -> {}={}, exists={}",
+                schema, table, colName, value, exists);
+
+        return exists;
+    }
+
+
+
+
     @PutMapping("/{schema}/{table}/{id}")
-    public int updateRow(
+    public ResponseEntity<?> updateRow(
             @PathVariable String schema,
             @PathVariable String table,
             @PathVariable String id,
             @RequestBody Map<String, Object> rowData,
             HttpServletRequest request) throws SQLException {
 
+        long start = System.currentTimeMillis();
+        log.info("Update request for {}.{} | ID={} | Payload={}", schema, table, id, rowData);
+
         List<Map<String, Object>> columns = metadataService.getColumns(schema, table);
         List<String> pkColumns = metadataService.getPrimaryKeys(schema, table);
 
         if (pkColumns.isEmpty()) {
-            throw new RuntimeException("No primary key defined for " + schema + "." + table);
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(
+                            "status", "error",
+                            "timestamp", LocalDateTime.now().toString(),
+                            "uri", request.getRequestURI(),
+                            "message", "Primary key not found"
+                    ));
         }
+
         String pk = pkColumns.get(0);
 
-        // 1️⃣ Auto system fields
-//        String currentUser = getCurrentUsername(); // JWT / SecurityContext se
-        String currentUser = "System";
-        LocalDateTime now = LocalDateTime.now();
-
-        rowData.put("modified_by", currentUser);
-        rowData.put("modified_date", LocalDateTime.now());
-        rowData.put("created_uri", request.getRequestURL().toString());
-        rowData.put("modified_uri", request.getRequestURL().toString());
-        rowData.put("modified_ip_addr", IPUtil.getClientIp(request));
-        rowData.put("api_service_url", request.getRequestURL());
-
-        // 2️⃣ Build SET clause
-        List<String> updatableCols = new ArrayList<>();
-        List<Object> values = new ArrayList<>();
-
+        // ------------------- DUPLICATE CODE VALIDATION ------------------------
         for (Map<String, Object> col : columns) {
-            String colName = (String) col.get("name");
-            String dataType = (String) col.get("type");
+            String colName = col.get("name").toString();
 
-            // Skip PK
-            if (pkColumns.contains(colName))
-                continue;
+            if (colName.toLowerCase().contains("code") && rowData.containsKey(colName)) {
 
-            if (rowData.containsKey(colName)) {
-                Object val = rowData.get(colName);
-                if (val != null && !val.toString().trim().isEmpty()) {
-                    updatableCols.add(colName + " = ?");
-                    values.add(convertValue(val, dataType, colName));
+                String newValue = rowData.get(colName).toString().toUpperCase();
+
+                String sql = "SELECT COUNT(*) FROM " + schema + "." + table +
+                        " WHERE UPPER(" + colName + ") = ? AND " + pk + " <> ?";
+
+                int count = jdbcTemplate.queryForObject(sql, Integer.class, newValue, id);
+
+                if (count > 0) {
+                    log.warn("Duplicate {} detected during update: {}", colName, newValue);
+
+                    return ResponseEntity
+                            .status(HttpStatus.CONFLICT)
+                            .body(Map.of(
+                                    "status", "error",
+                                    "timestamp", LocalDateTime.now().toString(),
+                                    "uri", request.getRequestURI(),
+                                    "message", colName + " already exists: " + newValue
+                            ));
                 }
             }
         }
 
-        if (updatableCols.isEmpty()) {
-            throw new RuntimeException("No updatable columns provided for " + schema + "." + table);
+        // -------------------- SYSTEM FIELDS -------------------------
+        rowData.put("modified_by", "System");
+        rowData.put("modified_date", LocalDateTime.now());
+        rowData.put("modified_ip_addr", IPUtil.getClientIp(request));
+        rowData.put("modified_uri", request.getRequestURL().toString());
+        rowData.put("api_service_url", request.getRequestURL());
+
+        List<String> updateCols = new ArrayList<>();
+        List<Object> values = new ArrayList<>();
+
+        for (Map<String, Object> col : columns) {
+            String colName = col.get("name").toString();
+            String type = col.get("type").toString();
+
+            if (pk.equals(colName)) continue;
+
+            if (rowData.containsKey(colName)) {
+                Object val = rowData.get(colName);
+                if (val != null && !val.toString().trim().isEmpty()) {
+                    updateCols.add(colName + " = ?");
+                    values.add(convertValue(val, type, colName));
+                }
+            }
         }
 
-        // 3️⃣ Add PK value at end (convert using column type for pk)
-        values.add(convertValue(id, getColumnType(columns, pk), pk));
+        if (updateCols.isEmpty()) {
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(
+                            "status", "error",
+                            "timestamp", LocalDateTime.now().toString(),
+                            "uri", request.getRequestURI(),
+                            "message", "No updatable columns provided"
+                    ));
+        }
 
-        String setClause = String.join(", ", updatableCols);
-        String sql = "UPDATE " + schema + "." + table + " SET " + setClause + " WHERE " + pk + " = ?";
+        values.add(id); // PK last
 
-        return jdbcTemplate.update(sql, values.toArray());
+        String sql = "UPDATE " + schema + "." + table +
+                " SET " + String.join(", ", updateCols) + " WHERE " + pk + " = ?";
+
+        log.info("Executing UPDATE: {}", sql);
+
+        try {
+            int updated = jdbcTemplate.update(sql, values.toArray());
+
+            log.info("Update completed for {}.{} | ID={} | Updated={} | {} ms",
+                    schema, table, id, updated, (System.currentTimeMillis() - start));
+
+            return ResponseEntity.ok(Map.of(
+                    "status", "success",
+                    "message", "Row updated successfully"
+            ));
+
+        } catch (Exception ex) {
+
+            log.error("Update failed for {}.{} | ID={} : {}", schema, table, id, ex.getMessage(), ex);
+
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "status", "error",
+                            "timestamp", LocalDateTime.now().toString(),
+                            "uri", request.getRequestURI(),
+                            "message", ex.getMessage()
+                    ));
+        }
     }
+
+
 
     private String getColumnType(List<Map<String, Object>> columns, String columnName) {
         return columns.stream()
@@ -554,21 +763,43 @@ public class DynamicCrudApiController {
     }
 
     public boolean getValidSchemaList(String schema) {
+        log.info("Validating schema: {}", schema);
+
+        if (schema == null || schema.isBlank()) {
+            log.warn("Schema validation failed: Provided schema is null or blank");
+            return false;
+        }
+
         try {
-            if (!schema.isBlank()) {
-                String schemas = getProperty("valid.schema.list");
-                List<String> schemaList = new ArrayList<>(Arrays.asList(schemas.split(",")));
-                if (schemaList.contains(schema)) {
-                    return true;
-                }
-            } else {
+            String schemas = getProperty("valid.schema.list");
+
+            if (schemas == null || schemas.isBlank()) {
+                log.error("Schema validation failed: 'valid.schema.list' property is missing or empty");
                 return false;
             }
-        } catch (Exception e) {
-            log.error("Exception--->" + e);
+
+            List<String> schemaList = Arrays.stream(schemas.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .distinct()  // avoid duplicates
+                    .collect(Collectors.toList());
+
+            boolean isValid = schemaList.contains(schema);
+
+            if (isValid) {
+                log.info("Schema '{}' validated successfully", schema);
+            } else {
+                log.warn("Schema '{}' is not listed in valid.schema.list: {}", schema, schemaList);
+            }
+
+            return isValid;
         }
-        return false;
+        catch (Exception ex) {
+            log.error("Unexpected error validating schema '{}': {}", schema, ex.getMessage(), ex);
+            return false;
+        }
     }
+
 
     public String getProperty(String val) {
         String propValue = "";
