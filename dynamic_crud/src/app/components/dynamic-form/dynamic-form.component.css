@@ -270,17 +270,44 @@
 } 
 
 /* Sticky Actions Column */
+.data-table-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  overflow: hidden;
+  max-height: 600px; /* optional */
+}
+
+.table-scroll-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  max-height: 500px;
+}
+
+/* Sticky actions column stays intact */
 .sticky-actions-header,
 .sticky-actions-cell {
   position: sticky;
   right: 0;
-  z-index: 100;
   background: white;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
-  min-width: 120px;
-  width: 120px;
-  max-width: 120px;
+  z-index: 2;
+  box-shadow: -2px 0 6px rgba(0,0,0,0.1);
 }
+
+/* Keep paginator visible */
+mat-paginator {
+  background: white;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  border-top: 1px solid #e0e0e0;
+  padding-bottom: 5px;
+}
+
 
 .sticky-actions-header {
   background: #e3f2fd !important;
@@ -511,7 +538,6 @@
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
-
 
 .data-table-container {
   width: 100%;

@@ -32,21 +32,8 @@ public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
-//    @PostMapping("/login")
-//    public ResponseEntity<?> login(@RequestBody Map<String, String> loginRequest) {
-//        log.info("Send loginRequest={}", loginRequest);
-//        String username = loginRequest.get("username");
-//        String password = loginRequest.get("password");
-//
-//        if (validUsername.equals(username) && validSecret.equals(password)) {
-//            String token = jwtUtil.generateToken(username);
-//            return ResponseEntity.ok(Map.of("token", token));
-//        } else {
-//            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid credentials"));
-//        }
-//    }
-@PostMapping("/login")
-public ResponseEntity<?> login(@RequestBody(required = false) Map<String, String> loginRequest) {
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody(required = false) Map<String, String> loginRequest) {
 
     long start = System.currentTimeMillis();
     log.info("Sending login request ");
