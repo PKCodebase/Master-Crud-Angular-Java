@@ -1,3 +1,4 @@
+
 import { Component, Input, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { MatTableDataSource } from '@angular/material/table';
@@ -194,88 +195,93 @@ loadMetadata(schema: any, table: any): void {
   }
   
   onSubmit() {
-    if (this.form.valid) {
-      const formData = this.form.getRawValue(); // include disabled fields like PK & audit fields
+  if (!this.form.valid) return;
 
-      this.columns.forEach(col => {
-        const colType = col.type.toLowerCase();
+  const formData = this.form.getRawValue(); // include disabled fields like PK & audit fields
 
-        if (formData[col.name]) {
-          const val = formData[col.name];
+  // normalize date/timestamp fields
+  this.columns.forEach(col => {
+    const colType = (col.type || '').toLowerCase();
+    if (!formData[col.name]) return;
 
-          if (colType.includes("date") && !colType.includes("timestamp")) {
-            const d = new Date(val);
-            formData[col.name] = d.toISOString().split("T")[0]; // yyyy-MM-dd
-          } else if (colType.includes("timestamp")) {
-            const d = new Date(val);
-            const pad = (n: number) => n.toString().padStart(2, "0");
-            formData[col.name] =
-              `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
-              `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-          }
-        }
-      });
+    const val = formData[col.name];
 
-      if (this.isEdit && this.rowId) {
-
-  this.formService.update(this.selectedSchema, this.selectedTable, this.rowId, formData)
-    .subscribe({
-
-      next: (res: any) => {
-
-        // 🔥 Handle backend JSON error structure (status: "error")
-        if (res?.status === 'error') {
-          alert(res.message);      // shows: colony_code already exists: C223
-          return;
-        }
-
-        // 🔥 SUCCESS
-        alert('Row updated successfully!');
-        this.isEdit = false;
-        this.rowId = null;
-        this.loadData(this.selectedSchema, this.selectedTable);
-        this.form.reset();
-      },
-
-      error: (err: any) => {
-        // 🔥 Handle thrown exceptions from backend (RuntimeException)
-        const msg =
-          err?.error?.message ||
-          err?.message ||
-          'Update failed due to server error.';
-
-        alert(msg);
+    if (colType.includes('date') && !colType.includes('timestamp')) {
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) formData[col.name] = d.toISOString().split('T')[0]; // yyyy-MM-dd
+    } else if (colType.includes('timestamp')) {
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) {
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        formData[col.name] =
+          `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
+          `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
       }
-
-    });
-
-}
- else {
-        this.formService.insertRow(this.selectedSchema, this.selectedTable, formData)
-  .subscribe({
-    next: (res: any) => {
-
-      // 🔥 BACKEND ERROR HANDLING
-      if (res?.status === 'error') {
-        alert(res.message);     // Show backend message: "Code already exists: C223"
-        return;
-      }
-
-      // 🔥 SUCCESS HANDLING
-      alert('Row inserted successfully!');
-      this.loadData(this.selectedSchema, this.selectedTable);
-      this.form.reset();
-    },
-
-    error: err => {
-      // 🔥 HARD FAILURE FROM SERVER (e.g. 500)
-      alert( (err?.error?.message || err.message));
     }
   });
 
-      }
-    }
+  const showAlert = (msg: string) => {
+    // you asked for an alert emoji — ⚠️ for errors, ✅ for success
+    window.alert(msg);
+  };
+
+  if (this.isEdit && this.rowId) {
+    // UPDATE
+    this.formService.update(this.selectedSchema, this.selectedTable, this.rowId, formData)
+      .subscribe({
+        next: (res: any) => {
+          // backend may return 200 with body { status: 'error', message: '...' }
+          if (res?.status === 'error') {
+            showAlert(`⚠️ ${res.message || 'Operation failed'}`);
+            return;
+          }
+
+          showAlert(`✅ Row updated successfully!`);
+          this.isEdit = false;
+          this.rowId = null;
+          this.loadData(this.selectedSchema, this.selectedTable);
+          this.form.reset();
+        },
+        error: (err: any) => {
+          // err may be HttpErrorResponse with err.error as object/string
+          const backendMsg =
+            // common shapes
+            err?.error?.message ||
+            (typeof err?.error === 'string' ? err.error : null) ||
+            err?.message ||
+            `Update failed (status: ${err?.status ?? 'unknown'})`;
+
+          showAlert(`⚠️ ${backendMsg}`);
+        }
+      });
+  } else {
+    // INSERT
+    this.formService.insertRow(this.selectedSchema, this.selectedTable, formData)
+      .subscribe({
+        next: (res: any) => {
+          // handle backend 200-with-error body
+          if (res?.status === 'error') {
+            showAlert(`⚠️ ${res.message || 'Insert failed'}`);
+            return;
+          }
+
+          showAlert(`✅ Row inserted successfully!`);
+          this.loadData(this.selectedSchema, this.selectedTable);
+          this.form.reset();
+        },
+        error: (err: any) => {
+          const backendMsg =
+            err?.error?.message ||
+            (typeof err?.error === 'string' ? err.error : null) ||
+            err?.message ||
+            `Insert failed (status: ${err?.status ?? 'unknown'})`;
+
+          showAlert(`⚠️ ${backendMsg}`);
+        }
+      });
   }
+}
+
 
   onDelete(row: any): void {
     if (confirm("Are you sure you want to delete this record?")) {
@@ -284,7 +290,7 @@ loadMetadata(schema: any, table: any): void {
 
       this.formService.delete(this.selectedSchema, this.selectedTable, rowId).subscribe({
         next: () => {
-          alert('Row deleted successfully!');
+          alert('✅ Row deleted successfully!');
           this.loadData(this.selectedSchema, this.selectedTable);
         },
         error: (err) => {

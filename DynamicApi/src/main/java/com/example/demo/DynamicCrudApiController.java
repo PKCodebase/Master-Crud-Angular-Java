@@ -355,32 +355,45 @@ public class DynamicCrudApiController {
                         ));
             }
         }
-
         // ----------------- UNIQUE CODE VALIDATION -----------------
         for (Map<String, Object> col : columns) {
-            String colName = col.get("name").toString();
 
-            if (colName.toLowerCase().contains("code") && rowData.containsKey(colName)) {
-                String value = rowData.get(colName).toString().toUpperCase();
+            String colName = col.get("name").toString().toLowerCase();
+            String colType = col.get("type").toString().toLowerCase();
 
-                if (isDuplicateCode(schema, table, colName, value)) {
-                    log.warn("Duplicate {} found : {}", colName, value);
-                    return ResponseEntity
-                            .status(HttpStatus.CONFLICT)
-                            .body(Map.of(
-                                    "status", "error",
-                                    "timestamp", LocalDateTime.now().toString(),
-                                    "uri", request.getRequestURI(),
-                                    "message", colName + " already exists: " + value
-                            ));
-                }
+            // Only validate if column name ends with _code
+            if (!colName.endsWith("_code")) continue;
+
+            // Only validate text/varchar columns
+            if (!(colType.contains("char") || colType.contains("text") || colType.contains("varchar"))) {
+                continue;
+            }
+
+            // Skip if no value provided
+            if (!rowData.containsKey(colName)) continue;
+
+            String value = rowData.get(colName).toString().trim().toUpperCase();
+            if (value.isEmpty()) continue;
+
+            if (isDuplicateCode(schema, table, colName, value)) {
+                return ResponseEntity
+                        .status(HttpStatus.CONFLICT)
+                        .body(Map.of(
+                                "status", "error",
+                                "timestamp", LocalDateTime.now().toString(),
+                                "uri", request.getRequestURI(),
+                                "message", colName + " already exists: " + value
+                        ));
             }
         }
+
 
         // ----------------- SYSTEM FIELDS -----------------
         rowData.put("created_by", "System");
         rowData.put("created_date", LocalDateTime.now());
+        rowData.put("created_uri", request.getRequestURL().toString());
         rowData.put("created_ip_addr", IPUtil.getClientIp(request));
+        rowData.put("api_service_url", request.getRequestURL());
         rowData.putIfAbsent("status", "ACTIVE");
 
         Map<String, Object> finalData = new HashMap<>(rowData);
@@ -500,8 +513,22 @@ public class DynamicCrudApiController {
         }
 
         // ---------------------- 2️⃣ CHECK IF RECORD EXISTS ----------------------
-        String sqlCheck = "SELECT COUNT(*) FROM " + schema + "." + table + " WHERE " + pk + " = ?";
-        int exists = jdbcTemplate.queryForObject(sqlCheck, Integer.class, id);
+//        String sqlCheck = "SELECT COUNT(*) FROM " + schema + "." + table + " WHERE " + pk + " = ?";
+//        int exists = jdbcTemplate.queryForObject(sqlCheck, Integer.class, id);
+//
+//        if (exists == 0) {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+//                    "status", "error",
+//                    "timestamp", LocalDateTime.now().toString(),
+//                    "uri", request.getRequestURI(),
+//                    "message", "Guid not found for ID: " + id
+//            ));
+//        }
+        // ---------------------- 2️⃣ CHECK IF RECORD EXISTS ----------------------
+        String sqlCheck = "SELECT COUNT(*) FROM " + schema + "." + table +
+                " WHERE LOWER(" + pk + ") = LOWER(?)";
+
+        int exists = jdbcTemplate.queryForObject(sqlCheck, Integer.class, id.trim());
 
         if (exists == 0) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
@@ -511,6 +538,7 @@ public class DynamicCrudApiController {
                     "message", "Guid not found for ID: " + id
             ));
         }
+
 
         // ---------------------- 3️⃣ FOREIGN KEY VALIDATION ----------------------
         List<Map<String, Object>> foreignKeys = metadataService.getForeignKeys(schema, table);
@@ -566,31 +594,55 @@ public class DynamicCrudApiController {
         }
 
         // ---------------------- 4️⃣ DUPLICATE CODE VALIDATION ----------------------
+//        for (Map<String, Object> col : columns) {
+//
+//            String colName = col.get("name").toString();
+//
+//            if (colName.toLowerCase().contains("code") && rowData.containsKey(colName)) {
+//
+//                String newValue = rowData.get(colName).toString().toUpperCase();
+//
+//                String sql = "SELECT COUNT(*) FROM " + schema + "." + table +
+//                        " WHERE UPPER(" + colName + ") = ? AND " + pk + " <> ?";
+//
+//                int count = jdbcTemplate.queryForObject(sql, Integer.class, newValue, id);
+//
+//                if (count > 0) {
+//                    log.warn("Duplicate {} detected during update: {}", colName, newValue);
+//
+//                    return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+//                            "status", "error",
+//                            "timestamp", LocalDateTime.now().toString(),
+//                            "uri", request.getRequestURI(),
+//                            "message", colName + " already exists: " + newValue
+//                    ));
+//                }
+//            }
+//        }
+
+        // ----------------- UNIQUE CODE VALIDATION -----------------
         for (Map<String, Object> col : columns) {
 
-            String colName = col.get("name").toString();
+            String colName = col.get("name").toString().toLowerCase();
 
-            if (colName.toLowerCase().contains("code") && rowData.containsKey(colName)) {
+            // Only check for exact *_code fields
+            if (!colName.endsWith("_code")) continue;
 
-                String newValue = rowData.get(colName).toString().toUpperCase();
+            if (rowData.containsKey(col.get("name"))) {
 
-                String sql = "SELECT COUNT(*) FROM " + schema + "." + table +
-                        " WHERE UPPER(" + colName + ") = ? AND " + pk + " <> ?";
+                String value = rowData.get(col.get("name")).toString().toUpperCase();
 
-                int count = jdbcTemplate.queryForObject(sql, Integer.class, newValue, id);
-
-                if (count > 0) {
-                    log.warn("Duplicate {} detected during update: {}", colName, newValue);
-
+                if (isDuplicateCode(schema, table, (String) col.get("name"), value)) {
                     return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                             "status", "error",
                             "timestamp", LocalDateTime.now().toString(),
                             "uri", request.getRequestURI(),
-                            "message", colName + " already exists: " + newValue
+                            "message", col.get("name") + " already exists: " + value
                     ));
                 }
             }
         }
+
 
         // ---------------------- 5️⃣ SYSTEM FIELDS ----------------------
         rowData.put("modified_by", "System");
@@ -634,10 +686,10 @@ public class DynamicCrudApiController {
                 " SET " + String.join(", ", updateCols) +
                 " WHERE " + pk + " = ?";
 
-        log.info("Raw update successfully : {} ", schema, table, id, rowData);
 
         try {
             jdbcTemplate.update(sql, values.toArray());
+            log.info("Raw update successfully : {} ", schema, table, id, rowData);
 
             return ResponseEntity.ok(Map.of(
                     "status", "success",
